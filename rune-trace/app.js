@@ -1,4 +1,4 @@
-const APP_VERSION = "0.0.1";
+const APP_VERSION = "0.0.2";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -94,6 +94,7 @@ const state = {
 };
 
 const pathVariantCache = new Map();
+const pathSequenceCache = new Map();
 const placementVariantCache = new Map();
 
 function cellKey(row, col) {
@@ -120,19 +121,75 @@ function sequenceSignature(points) {
     .join("|");
 }
 
+function getPathSequences(template) {
+  if (pathSequenceCache.has(template.id)) {
+    return pathSequenceCache.get(template.id);
+  }
+
+  const sequences = new Map();
+  TRANSFORMS.forEach((transform) => {
+    const transformed = template.points.map(transform);
+    [transformed, [...transformed].reverse()].forEach((sequence) => {
+      const normalized = normalizeFromFirst(sequence);
+      sequences.set(sequenceSignature(normalized), normalized);
+    });
+  });
+
+  const result = [...sequences.values()];
+  pathSequenceCache.set(template.id, result);
+  return result;
+}
+
 function getPathVariants(template) {
   if (pathVariantCache.has(template.id)) {
     return pathVariantCache.get(template.id);
   }
 
-  const signatures = new Set();
-  TRANSFORMS.forEach((transform) => {
-    const transformed = template.points.map(transform);
-    signatures.add(sequenceSignature(transformed));
-    signatures.add(sequenceSignature([...transformed].reverse()));
-  });
+  const signatures = new Set(
+    getPathSequences(template).map((sequence) => sequenceSignature(sequence)),
+  );
   pathVariantCache.set(template.id, signatures);
   return signatures;
+}
+
+function pathAsRelativePoints(path) {
+  return normalizeFromFirst(path.map(({ row, col }) => [col, row]));
+}
+
+function isRunePrefix(path, template) {
+  if (path.length === 0) {
+    return true;
+  }
+  const relative = pathAsRelativePoints(path);
+  return getPathSequences(template).some((sequence) =>
+    relative.every(
+      ([x, y], index) =>
+        sequence[index]?.[0] === x && sequence[index]?.[1] === y,
+    ),
+  );
+}
+
+function getNextStepCandidates(path, template) {
+  if (path.length === 0 || path.length >= template.points.length) {
+    return [];
+  }
+
+  const relative = pathAsRelativePoints(path);
+  const candidates = new Map();
+  getPathSequences(template).forEach((sequence) => {
+    const matches = relative.every(
+      ([x, y], index) =>
+        sequence[index]?.[0] === x && sequence[index]?.[1] === y,
+    );
+    if (!matches) {
+      return;
+    }
+    const next = sequence[path.length];
+    const current = sequence[path.length - 1];
+    const delta = [next[0] - current[0], next[1] - current[1]];
+    candidates.set(delta.join(","), delta);
+  });
+  return [...candidates.values()];
 }
 
 function getPlacementVariants(template) {
@@ -391,6 +448,62 @@ function cellFromPointer(event) {
   };
 }
 
+function diagonalPriorityCell(event) {
+  const rune = selectedRune();
+  const last = state.currentPath[state.currentPath.length - 1];
+  if (!rune || !last) {
+    return null;
+  }
+
+  const diagonalSteps = getNextStepCandidates(state.currentPath, rune).filter(
+    ([colDelta, rowDelta]) =>
+      Math.abs(colDelta) === 1 && Math.abs(rowDelta) === 1,
+  );
+  if (diagonalSteps.length === 0) {
+    return null;
+  }
+
+  const rect = refs.board.getBoundingClientRect();
+  const pointerCol = ((event.clientX - rect.left) / rect.width) * BOARD_SIZE;
+  const pointerRow = ((event.clientY - rect.top) / rect.height) * BOARD_SIZE;
+  const colMotion = pointerCol - (last.col + 0.5);
+  const rowMotion = pointerRow - (last.row + 0.5);
+  const snapThreshold = 0.28;
+
+  const preferred = diagonalSteps
+    .filter(
+      ([colDelta, rowDelta]) =>
+        colMotion * colDelta >= snapThreshold &&
+        rowMotion * rowDelta >= snapThreshold,
+    )
+    .sort(
+      ([aCol, aRow], [bCol, bRow]) =>
+        colMotion * bCol +
+        rowMotion * bRow -
+        (colMotion * aCol + rowMotion * aRow),
+    )[0];
+
+  if (!preferred) {
+    return null;
+  }
+
+  const [colDelta, rowDelta] = preferred;
+  const cell = {
+    row: last.row + rowDelta,
+    col: last.col + colDelta,
+  };
+  if (
+    cell.row < 0 ||
+    cell.row >= BOARD_SIZE ||
+    cell.col < 0 ||
+    cell.col >= BOARD_SIZE ||
+    isBlocked(cell)
+  ) {
+    return null;
+  }
+  return cell;
+}
+
 function isBlocked(cell) {
   const key = cellKey(cell.row, cell.col);
   return state.claimed.has(key) || state.corrupted.has(key);
@@ -400,6 +513,17 @@ function isAdjacent(a, b) {
   const rowDistance = Math.abs(a.row - b.row);
   const colDistance = Math.abs(a.col - b.col);
   return Math.max(rowDistance, colDistance) === 1;
+}
+
+function isOrthogonalStep(a, b) {
+  return Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1;
+}
+
+function isDiagonalStep(a, b) {
+  return (
+    Math.abs(a.row - b.row) === 1 &&
+    Math.abs(a.col - b.col) === 1
+  );
 }
 
 function sameCell(a, b) {
@@ -423,6 +547,22 @@ function appendDrawingCell(cell) {
     return;
   }
 
+  const rune = selectedRune();
+  const previous = path[path.length - 2];
+  if (
+    rune &&
+    previous &&
+    isOrthogonalStep(previous, last) &&
+    isDiagonalStep(previous, cell)
+  ) {
+    const correctedPath = [...path.slice(0, -1), cell];
+    if (isRunePrefix(correctedPath, rune)) {
+      path[path.length - 1] = cell;
+      renderBoard();
+      return;
+    }
+  }
+
   if (last && !isAdjacent(last, cell)) {
     return;
   }
@@ -431,8 +571,18 @@ function appendDrawingCell(cell) {
     return;
   }
 
-  const rune = selectedRune();
   if (!rune || path.length >= rune.points.length) {
+    return;
+  }
+
+  const nextSteps = getNextStepCandidates(path, rune);
+  const diagonalOnly =
+    nextSteps.length > 0 &&
+    nextSteps.every(
+      ([colDelta, rowDelta]) =>
+        Math.abs(colDelta) === 1 && Math.abs(rowDelta) === 1,
+    );
+  if (last && diagonalOnly && isOrthogonalStep(last, cell)) {
     return;
   }
 
@@ -463,7 +613,7 @@ function continueDrawing(event) {
     return;
   }
   event.preventDefault();
-  appendDrawingCell(cellFromPointer(event));
+  appendDrawingCell(diagonalPriorityCell(event) ?? cellFromPointer(event));
 }
 
 function cancelDrawing() {
