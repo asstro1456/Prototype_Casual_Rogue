@@ -4,17 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b1020">
-  <title>프리즘 리콜 — 심플 라인 프로토타입</title>
-  <link rel="stylesheet" href="./styles.css?v=0.3.0">
+  <title>프리즘 리콜 — 실시간 디펜스 프로토타입</title>
+  <link rel="stylesheet" href="./styles.css?v=0.4.0">
 </head>
 <body>
   <main class="app-shell">
     <section class="game-card" aria-label="프리즘 리콜 게임 화면">
       <header class="topbar">
         <div class="title-lockup">
-          <p class="eyebrow">PRISM RECALL // SIMPLE LINE PROTOTYPE</p>
+          <p class="eyebrow">PRISM RECALL // REALTIME DEFENSE PROTOTYPE</p>
           <h1>프리즘 리콜</h1>
-          <span class="header-version" data-app-version>v0.3.0 · SIMPLE LINE</span>
+          <span class="header-version" data-app-version>v0.4.0 · REALTIME DEFENSE</span>
         </div>
         <button id="helpButton" class="icon-button" type="button" aria-label="게임 방법 보기">?</button>
       </header>
@@ -49,7 +49,7 @@
             <span id="patternLabel" class="pattern-badge">온보딩형</span>
             <h2 id="enemyName">기억체 01</h2>
           </div>
-          <p id="roundGoal">아래로 진격하는 적을 저지하세요.</p>
+          <p id="roundGoal">자동 전투 중 색 공격의 타이밍을 선택하세요.</p>
         </div>
 
         <div class="portrait-stage">
@@ -74,7 +74,7 @@
         </div>
 
         <div class="progress-row">
-          <span>웨이브 처리</span>
+          <span>웨이브 격퇴</span>
           <div class="progress-bar"><i id="clearProgress"></i></div>
           <strong id="clearPercent">0%</strong>
         </div>
@@ -82,10 +82,10 @@
 
       <section class="action-zone">
         <div class="section-heading">
-          <span>캐릭터 선택</span>
-          <small id="tapCount">탭 0회</small>
+          <span>색 전체 공격</span>
+          <small id="tapCount">공용 쿨타임 준비</small>
         </div>
-        <div id="actionChoices" class="action-choices character-actions" aria-label="전사 또는 궁수 선택"></div>
+        <div id="actionChoices" class="action-choices color-actions" aria-label="적색, 청색, 황색 전체 공격"></div>
         <div class="action-footer">
           <p id="feedbackText" role="status">번호가 표시된 공격 후보 하나를 탭하세요.</p>
         </div>
@@ -95,7 +95,7 @@
 
   <div id="modalBackdrop" class="modal-backdrop is-open">
     <section id="modalPanel" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
-      <span class="modal-version" data-app-version>v0.3.0 · SIMPLE LINE</span>
+      <span class="modal-version" data-app-version>v0.4.0 · REALTIME DEFENSE</span>
       <p id="modalEyebrow" class="eyebrow">4 ROUND PLAYTEST</p>
       <h2 id="modalTitle">넓게 베고, 깊게 꿰뚫으세요</h2>
       <div id="modalBody" class="modal-body"></div>
@@ -103,6 +103,6 @@
     </section>
   </div>
 
-  <script src="./app.js?v=0.3.0"></script>
+  <script src="./app.js?v=0.4.0"></script>
 </body>
 </html>

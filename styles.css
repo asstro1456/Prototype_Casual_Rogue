@@ -750,6 +750,10 @@ h1 {
   grid-template-columns: repeat(2, 1fr);
 }
 
+.color-actions {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .action-button {
   position: relative;
   display: grid;
@@ -799,6 +803,21 @@ h1 {
   border-color: rgba(117, 229, 180, 0.65);
   background: linear-gradient(180deg, rgba(117, 229, 180, 0.14), var(--panel-2));
   box-shadow: inset 0 0 20px rgba(117, 229, 180, 0.08);
+}
+
+.color-button[data-color="red"] {
+  border-color: rgba(255, 113, 135, 0.52);
+  background: linear-gradient(180deg, rgba(255, 93, 118, 0.12), var(--panel-2));
+}
+
+.color-button[data-color="blue"] {
+  border-color: rgba(83, 167, 255, 0.52);
+  background: linear-gradient(180deg, rgba(83, 167, 255, 0.12), var(--panel-2));
+}
+
+.color-button[data-color="yellow"] {
+  border-color: rgba(255, 214, 104, 0.58);
+  background: linear-gradient(180deg, rgba(255, 214, 104, 0.12), var(--panel-2));
 }
 
 .candidate-number {
@@ -853,6 +872,21 @@ h1 {
 .action-button[data-role="duo"] .action-symbol {
   color: var(--success);
   background: rgba(117, 229, 180, 0.12);
+}
+
+.color-button[data-color="red"] .action-symbol {
+  color: var(--red);
+  background: rgba(255, 93, 118, 0.14);
+}
+
+.color-button[data-color="blue"] .action-symbol {
+  color: var(--blue);
+  background: rgba(83, 167, 255, 0.14);
+}
+
+.color-button[data-color="yellow"] .action-symbol {
+  color: var(--yellow);
+  background: rgba(255, 214, 104, 0.14);
 }
 
 .action-button strong {

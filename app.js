@@ -1,156 +1,153 @@
-const APP_VERSION = "0.3.0";
-const APP_VERSION_NAME = "SIMPLE LINE";
+const APP_VERSION = "0.4.0";
+const APP_VERSION_NAME = "REALTIME DEFENSE";
 
-const ENEMY_META = {
-  normal: {
-    name: "일반형",
-    symbol: "◆",
-    hp: 1,
-    tag: "NORMAL",
-    color: "red",
-  },
-  armor: {
-    name: "중장형",
-    symbol: "●",
-    hp: 2,
-    tag: "ARMOR",
-    color: "blue",
-  },
+const COLOR_META = {
+  red: { name: "적색", symbol: "◆" },
+  blue: { name: "청색", symbol: "●" },
+  yellow: { name: "황색", symbol: "▲" },
 };
 
-const ACTOR_META = {
-  warrior: {
-    name: "전사",
-    action: "전열 베기",
-    symbol: "⚔",
-  },
-  archer: {
-    name: "궁수",
-    action: "정밀 사격",
-    symbol: "➶",
-  },
+const ENEMY_TYPE_META = {
+  normal: { name: "일반형", hp: 1, tag: "NORMAL" },
+  armor: { name: "중장형", hp: 2, tag: "ARMOR" },
 };
 
 const MAX_SHIELD = 3;
 const BOARD_COLUMNS = 5;
 const BOARD_ROWS = 5;
+const MOVE_INTERVAL = 1500;
+const SPAWN_INTERVAL = 2600;
+const WARRIOR_INTERVAL = 1800;
+const ARCHER_INTERVAL = 2300;
+const COLOR_COOLDOWN = 1800;
 
 const ROUND_DATA = [
   {
     name: "빙결 해안 01",
-    pattern: "기본 진격",
-    goal: "앞줄은 전사, 중장형은 궁수로 막으세요.",
-    nextIntel: "중장형 비중 증가",
+    pattern: "실시간 훈련",
+    goal: "위험한 색이 방어선에 닿기 전에 전체 공격하세요.",
+    nextIntel: "중장형 등장 · 2회 공격 필요",
     wave: [
       [
-        { column: 1, type: "normal" },
-        { column: 2, type: "normal" },
-        { column: 3, type: "normal" },
+        { column: 1, color: "red", type: "normal" },
+        { column: 3, color: "blue", type: "normal" },
       ],
       [
-        { column: 0, type: "normal" },
-        { column: 2, type: "armor" },
-        { column: 4, type: "normal" },
+        { column: 0, color: "yellow", type: "normal" },
+        { column: 2, color: "red", type: "normal" },
+        { column: 4, color: "blue", type: "normal" },
       ],
       [
-        { column: 1, type: "armor" },
-        { column: 2, type: "normal" },
-        { column: 3, type: "armor" },
+        { column: 1, color: "blue", type: "armor" },
+        { column: 2, color: "yellow", type: "normal" },
+        { column: 3, color: "red", type: "normal" },
+      ],
+      [
+        { column: 0, color: "red", type: "normal" },
+        { column: 2, color: "blue", type: "normal" },
+        { column: 4, color: "yellow", type: "normal" },
       ],
     ],
   },
   {
     name: "빙결 해안 02",
-    pattern: "장갑 혼합",
-    goal: "전열의 수와 중장형 위치를 비교하세요.",
-    nextIntel: "다중 전열 등장",
+    pattern: "색상 혼합",
+    goal: "대상 수보다 방어선에 가까운 색을 먼저 보세요.",
+    nextIntel: "중장형 비중 증가",
     wave: [
       [
-        { column: 0, type: "normal" },
-        { column: 1, type: "normal" },
-        { column: 2, type: "normal" },
-        { column: 3, type: "normal" },
+        { column: 0, color: "red", type: "normal" },
+        { column: 1, color: "red", type: "normal" },
+        { column: 3, color: "blue", type: "armor" },
       ],
       [
-        { column: 1, type: "armor" },
-        { column: 3, type: "armor" },
+        { column: 1, color: "yellow", type: "normal" },
+        { column: 2, color: "blue", type: "normal" },
+        { column: 4, color: "yellow", type: "normal" },
       ],
       [
-        { column: 0, type: "normal" },
-        { column: 2, type: "armor" },
-        { column: 4, type: "normal" },
+        { column: 0, color: "blue", type: "armor" },
+        { column: 2, color: "red", type: "armor" },
+        { column: 4, color: "yellow", type: "normal" },
       ],
       [
-        { column: 1, type: "normal" },
-        { column: 2, type: "normal" },
-        { column: 3, type: "normal" },
+        { column: 1, color: "red", type: "normal" },
+        { column: 2, color: "blue", type: "normal" },
+        { column: 3, color: "yellow", type: "normal" },
+      ],
+      [
+        { column: 0, color: "yellow", type: "armor" },
+        { column: 4, color: "red", type: "normal" },
       ],
     ],
   },
   {
     name: "빙결 해안 03",
-    pattern: "전열 압박",
-    goal: "한 줄 처치와 중장형 저격의 타이밍을 고르세요.",
-    nextIntel: "최종 혼합 웨이브",
+    pattern: "장갑 압박",
+    goal: "자동 공격이 중장형을 깎는 동안 색 공격 타이밍을 잡으세요.",
+    nextIntel: "세 색·중장형 종합 웨이브",
     wave: [
       [
-        { column: 0, type: "armor" },
-        { column: 1, type: "normal" },
-        { column: 2, type: "normal" },
-        { column: 3, type: "normal" },
-        { column: 4, type: "armor" },
+        { column: 0, color: "blue", type: "armor" },
+        { column: 2, color: "red", type: "normal" },
+        { column: 4, color: "yellow", type: "armor" },
       ],
       [
-        { column: 1, type: "armor" },
-        { column: 2, type: "armor" },
-        { column: 3, type: "armor" },
+        { column: 1, color: "red", type: "normal" },
+        { column: 2, color: "red", type: "normal" },
+        { column: 3, color: "blue", type: "normal" },
       ],
       [
-        { column: 0, type: "normal" },
-        { column: 1, type: "normal" },
-        { column: 3, type: "normal" },
-        { column: 4, type: "normal" },
+        { column: 0, color: "yellow", type: "normal" },
+        { column: 2, color: "blue", type: "armor" },
+        { column: 4, color: "red", type: "normal" },
       ],
       [
-        { column: 1, type: "normal" },
-        { column: 2, type: "armor" },
-        { column: 3, type: "normal" },
+        { column: 1, color: "yellow", type: "armor" },
+        { column: 3, color: "red", type: "armor" },
+      ],
+      [
+        { column: 0, color: "red", type: "normal" },
+        { column: 2, color: "blue", type: "normal" },
+        { column: 4, color: "yellow", type: "normal" },
       ],
     ],
   },
   {
     name: "핵심 기억체",
-    pattern: "종합 웨이브",
-    goal: "두 캐릭터만 사용해 마지막 진격을 막으세요.",
+    pattern: "종합 방어",
+    goal: "자동 전투를 지원하며 네 번째 웨이브를 방어하세요.",
     nextIntel: "런 결과 분석",
     wave: [
       [
-        { column: 0, type: "normal" },
-        { column: 1, type: "normal" },
-        { column: 2, type: "normal" },
-        { column: 3, type: "normal" },
-        { column: 4, type: "normal" },
+        { column: 0, color: "red", type: "normal" },
+        { column: 2, color: "blue", type: "armor" },
+        { column: 4, color: "yellow", type: "normal" },
       ],
       [
-        { column: 0, type: "armor" },
-        { column: 2, type: "armor" },
-        { column: 4, type: "armor" },
+        { column: 1, color: "yellow", type: "armor" },
+        { column: 3, color: "red", type: "armor" },
       ],
       [
-        { column: 1, type: "normal" },
-        { column: 2, type: "normal" },
-        { column: 3, type: "normal" },
+        { column: 0, color: "blue", type: "normal" },
+        { column: 1, color: "blue", type: "normal" },
+        { column: 3, color: "yellow", type: "normal" },
+        { column: 4, color: "yellow", type: "normal" },
       ],
       [
-        { column: 0, type: "normal" },
-        { column: 1, type: "armor" },
-        { column: 3, type: "armor" },
-        { column: 4, type: "normal" },
+        { column: 0, color: "red", type: "armor" },
+        { column: 2, color: "yellow", type: "armor" },
+        { column: 4, color: "blue", type: "armor" },
       ],
       [
-        { column: 1, type: "normal" },
-        { column: 2, type: "armor" },
-        { column: 3, type: "normal" },
+        { column: 1, color: "red", type: "normal" },
+        { column: 2, color: "blue", type: "normal" },
+        { column: 3, color: "yellow", type: "normal" },
+      ],
+      [
+        { column: 0, color: "yellow", type: "normal" },
+        { column: 2, color: "red", type: "armor" },
+        { column: 4, color: "blue", type: "normal" },
       ],
     ],
   },
@@ -159,16 +156,24 @@ const ROUND_DATA = [
 const state = {
   round: 0,
   shield: MAX_SHIELD,
-  taps: 0,
-  totalTaps: 0,
+  colorAttacks: 0,
+  totalColorAttacks: 0,
   enemies: [],
   waveIndex: 0,
   totalEnemies: 0,
   defeated: 0,
   breached: 0,
-  actorUse: { warrior: 0, archer: 0 },
+  autoKills: { warrior: 0, archer: 0 },
   enemySequence: 0,
-  locked: true,
+  cooldownUntil: 0,
+  paused: true,
+  running: false,
+  timing: {
+    move: 0,
+    spawn: 0,
+    warrior: 0,
+    archer: 0,
+  },
 };
 
 const refs = {
@@ -202,37 +207,49 @@ function getRemainingEnemyCount() {
   return Math.max(0, state.totalEnemies - state.defeated - state.breached);
 }
 
+function resetTiming() {
+  const now = performance.now();
+  state.timing.move = now;
+  state.timing.spawn = now;
+  state.timing.warrior = now;
+  state.timing.archer = now;
+}
+
 function spawnNextSquad() {
   const wave = ROUND_DATA[state.round].wave;
-  if (state.waveIndex >= wave.length) return;
+  if (state.waveIndex >= wave.length) return false;
 
-  wave[state.waveIndex].forEach(({ column, type }) => {
+  wave[state.waveIndex].forEach(({ column, color, type }) => {
     state.enemySequence += 1;
     state.enemies.push({
       id: state.enemySequence,
-      type,
       column,
       row: 0,
-      hp: ENEMY_META[type].hp,
+      color,
+      type,
+      hp: ENEMY_TYPE_META[type].hp,
     });
   });
   state.waveIndex += 1;
+  return true;
 }
 
 function startRun() {
   Object.assign(state, {
     round: 0,
     shield: MAX_SHIELD,
-    taps: 0,
-    totalTaps: 0,
+    colorAttacks: 0,
+    totalColorAttacks: 0,
     enemies: [],
     waveIndex: 0,
     totalEnemies: 0,
     defeated: 0,
     breached: 0,
-    actorUse: { warrior: 0, archer: 0 },
+    autoKills: { warrior: 0, archer: 0 },
     enemySequence: 0,
-    locked: false,
+    cooldownUntil: 0,
+    paused: false,
+    running: true,
   });
   closeModal();
   loadRound(0);
@@ -241,27 +258,28 @@ function startRun() {
 function loadRound(roundIndex) {
   const data = ROUND_DATA[roundIndex];
   state.round = roundIndex;
-  state.taps = 0;
+  state.colorAttacks = 0;
   state.enemies = [];
   state.waveIndex = 0;
   state.totalEnemies = getRoundTotalEnemies(data);
   state.defeated = 0;
   state.breached = 0;
-  state.locked = false;
+  state.cooldownUntil = 0;
+  state.paused = false;
+  state.running = true;
   spawnNextSquad();
-  refs.feedbackText.textContent = "전사 또는 궁수를 한 번 탭하세요.";
+  resetTiming();
+  refs.feedbackText.textContent = "전사와 궁수가 자동 공격 중입니다. 색 공격 타이밍을 선택하세요.";
   render();
 }
 
-function getFrontRow() {
-  if (!state.enemies.length) return null;
-  return Math.max(...state.enemies.map((enemy) => enemy.row));
-}
-
 function getWarriorTargets() {
-  const frontRow = getFrontRow();
-  if (frontRow === null) return [];
-  return state.enemies.filter((enemy) => enemy.row === frontRow);
+  if (!state.enemies.length) return [];
+  const frontRow = Math.max(...state.enemies.map((enemy) => enemy.row));
+  return state.enemies
+    .filter((enemy) => enemy.row === frontRow)
+    .sort((left, right) => left.column - right.column)
+    .slice(0, 2);
 }
 
 function getArcherTarget() {
@@ -269,14 +287,154 @@ function getArcherTarget() {
     .filter((enemy) => enemy.type === "armor")
     .sort((left, right) => right.row - left.row);
   if (armorTargets.length) return armorTargets[0];
-
   return [...state.enemies].sort((left, right) => right.row - left.row)[0] || null;
+}
+
+function damageEnemy(enemyId, damage) {
+  const enemy = state.enemies.find((unit) => unit.id === enemyId);
+  if (enemy) enemy.hp -= damage;
+}
+
+function removeDefeatedEnemies(source) {
+  const defeatedNow = state.enemies.filter((enemy) => enemy.hp <= 0).length;
+  state.defeated += defeatedNow;
+  if (source && defeatedNow > 0) state.autoKills[source] += defeatedNow;
+  state.enemies = state.enemies.filter((enemy) => enemy.hp > 0);
+  return defeatedNow;
+}
+
+function warriorAutoAttack() {
+  const targets = getWarriorTargets();
+  if (!targets.length) return false;
+  targets.forEach((enemy) => damageEnemy(enemy.id, 1));
+  const defeatedNow = removeDefeatedEnemies("warrior");
+  refs.feedbackText.textContent = `전사 자동 공격 · ${targets.length}체 타격 · ${defeatedNow}체 처치`;
+  return true;
+}
+
+function archerAutoAttack() {
+  const target = getArcherTarget();
+  if (!target) return false;
+  damageEnemy(target.id, 1);
+  const defeatedNow = removeDefeatedEnemies("archer");
+  refs.feedbackText.textContent = `궁수 자동 공격 · ${ENEMY_TYPE_META[target.type].name} 타격 · ${defeatedNow}체 처치`;
+  return true;
+}
+
+function advanceEnemies() {
+  state.enemies.forEach((enemy) => {
+    enemy.row += 1;
+  });
+  const breachedNow = state.enemies.filter((enemy) => enemy.row >= BOARD_ROWS).length;
+  state.breached += breachedNow;
+  state.shield -= breachedNow;
+  state.enemies = state.enemies.filter((enemy) => enemy.row < BOARD_ROWS);
+  if (breachedNow > 0) {
+    refs.feedbackText.textContent = `${breachedNow}체가 방어선을 돌파했습니다.`;
+  }
+  return true;
+}
+
+function ensureWavePresence(now) {
+  if (state.enemies.length || state.waveIndex >= ROUND_DATA[state.round].wave.length) return false;
+  const spawned = spawnNextSquad();
+  if (spawned) state.timing.spawn = now;
+  return spawned;
+}
+
+function isRoundClear() {
+  return (
+    state.waveIndex >= ROUND_DATA[state.round].wave.length
+    && state.enemies.length === 0
+  );
+}
+
+function settleBattle(now) {
+  if (state.shield <= 0) {
+    state.running = false;
+    state.paused = true;
+    render();
+    window.setTimeout(showFailModal, 250);
+    return true;
+  }
+
+  if (isRoundClear()) {
+    state.running = false;
+    state.paused = true;
+    render();
+    window.setTimeout(handleRoundClear, 250);
+    return true;
+  }
+
+  ensureWavePresence(now);
+  return false;
+}
+
+function gameLoop(now) {
+  updateCooldownUi(now);
+  if (!state.running || state.paused) return;
+
+  let changed = false;
+  if (now - state.timing.move >= MOVE_INTERVAL) {
+    changed = advanceEnemies() || changed;
+    state.timing.move = now;
+  }
+  if (now - state.timing.spawn >= SPAWN_INTERVAL) {
+    changed = spawnNextSquad() || changed;
+    state.timing.spawn = now;
+  }
+  if (now - state.timing.warrior >= WARRIOR_INTERVAL) {
+    changed = warriorAutoAttack() || changed;
+    state.timing.warrior = now;
+  }
+  if (now - state.timing.archer >= ARCHER_INTERVAL) {
+    changed = archerAutoAttack() || changed;
+    state.timing.archer = now;
+  }
+
+  if (settleBattle(now)) return;
+  if (changed) {
+    flashDamage();
+    render();
+  }
+}
+
+function attackColor(color) {
+  const now = performance.now();
+  if (!state.running || state.paused || now < state.cooldownUntil) return;
+
+  const targets = state.enemies.filter((enemy) => enemy.color === color);
+  if (!targets.length) {
+    refs.feedbackText.textContent = `${COLOR_META[color].name} 적이 화면에 없습니다.`;
+    return;
+  }
+
+  targets.forEach((enemy) => damageEnemy(enemy.id, 1));
+  const defeatedNow = removeDefeatedEnemies(null);
+  state.colorAttacks += 1;
+  state.totalColorAttacks += 1;
+  state.cooldownUntil = now + COLOR_COOLDOWN;
+  refs.feedbackText.textContent = `${COLOR_META[color].name} 전체 공격 · ${targets.length}체 타격 · ${defeatedNow}체 처치`;
+  flashDamage();
+
+  if (!settleBattle(now)) render();
+}
+
+function getColorTargetInfo(color) {
+  const targets = state.enemies.filter((enemy) => enemy.color === color);
+  if (!targets.length) return { count: 0, distance: null };
+  const nearestRow = Math.max(...targets.map((enemy) => enemy.row));
+  return {
+    count: targets.length,
+    distance: BOARD_ROWS - nearestRow,
+  };
 }
 
 function render() {
   renderHeader();
   renderBoard();
-  renderActions();
+  renderColorActions();
+  updateCooldownUi(performance.now());
 }
 
 function renderHeader() {
@@ -287,7 +445,6 @@ function renderHeader() {
   refs.roundGoal.textContent = data.goal;
   refs.shieldDisplay.textContent = `${"◆".repeat(Math.max(0, state.shield))}${"◇".repeat(Math.min(MAX_SHIELD, Math.max(0, MAX_SHIELD - state.shield)))}`;
   refs.enemyCountDisplay.textContent = `${getRemainingEnemyCount()}체`;
-  refs.tapCount.textContent = `탭 ${state.taps}회`;
 
   document.querySelectorAll("[data-round-dot]").forEach((dot, index) => {
     dot.classList.toggle("is-current", index === state.round);
@@ -314,7 +471,8 @@ function renderBoard() {
       continue;
     }
 
-    const meta = ENEMY_META[enemy.type];
+    const typeMeta = ENEMY_TYPE_META[enemy.type];
+    const colorMeta = COLOR_META[enemy.color];
     const warriorTarget = warriorIds.has(enemy.id);
     const archerTargeted = archerTarget?.id === enemy.id;
     cell.className = [
@@ -323,15 +481,15 @@ function renderBoard() {
       warriorTarget ? "is-warrior-target" : "",
       archerTargeted ? "is-archer-target" : "",
     ].filter(Boolean).join(" ");
-    cell.dataset.color = meta.color;
+    cell.dataset.color = enemy.color;
     cell.setAttribute("role", "gridcell");
     cell.setAttribute(
       "aria-label",
-      `${meta.name}, 체력 ${enemy.hp}${warriorTarget ? ", 전사 공격 대상" : ""}${archerTargeted ? ", 궁수 공격 대상" : ""}`,
+      `${colorMeta.name} ${typeMeta.name}, 체력 ${enemy.hp}`,
     );
     cell.innerHTML = `
-      <span class="enemy-tag">${meta.tag}</span>
-      <span class="symbol">${meta.symbol}</span>
+      <span class="enemy-tag">${typeMeta.tag}</span>
+      <span class="symbol">${colorMeta.symbol}</span>
       <i class="depth">${enemy.hp}HP</i>
       <span class="role-markers">
         ${warriorTarget ? '<i data-role="warrior">⚔</i>' : ""}
@@ -349,125 +507,54 @@ function renderBoard() {
   refs.clearPercent.textContent = `${progress}%`;
 }
 
-function renderActions() {
-  const warriorTargets = getWarriorTargets();
-  const archerTarget = getArcherTarget();
+function renderColorActions() {
   refs.actionChoices.innerHTML = "";
-
-  const warriorButton = makeActionButton(
-    "warrior",
-    `${warriorTargets.length}체에 1피해`,
-    attackWithWarrior,
-  );
-  const archerDescription = archerTarget
-    ? `${ENEMY_META[archerTarget.type].name} 1체에 2피해`
-    : "대상 없음";
-  const archerButton = makeActionButton(
-    "archer",
-    archerDescription,
-    attackWithArcher,
-  );
-
-  warriorButton.disabled = state.locked || !warriorTargets.length;
-  archerButton.disabled = state.locked || !archerTarget;
-  refs.actionChoices.append(warriorButton, archerButton);
-}
-
-function makeActionButton(type, description, handler) {
-  const actor = ACTOR_META[type];
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "action-button character-button";
-  button.dataset.role = type;
-  button.innerHTML = `
-    <span class="action-symbol">${actor.symbol}</span>
-    <strong>${actor.name} · ${actor.action}</strong>
-    <small>${description}</small>
-  `;
-  button.addEventListener("click", handler);
-  return button;
-}
-
-function damageEnemy(enemyId, damage) {
-  const enemy = state.enemies.find((unit) => unit.id === enemyId);
-  if (!enemy) return;
-  enemy.hp -= damage;
-}
-
-function removeDefeatedEnemies() {
-  const defeatedNow = state.enemies.filter((enemy) => enemy.hp <= 0).length;
-  state.defeated += defeatedNow;
-  state.enemies = state.enemies.filter((enemy) => enemy.hp > 0);
-  return defeatedNow;
-}
-
-function advanceEnemies() {
-  state.enemies.forEach((enemy) => {
-    enemy.row += 1;
+  Object.entries(COLOR_META).forEach(([color, meta]) => {
+    const targetInfo = getColorTargetInfo(color);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "action-button color-button";
+    button.dataset.color = color;
+    button.innerHTML = `
+      <span class="action-symbol">${meta.symbol}</span>
+      <strong>${meta.name} 전체 공격</strong>
+      <small class="action-detail">${targetInfo.count ? `대상 ${targetInfo.count}체 · 최근 ${targetInfo.distance}칸` : "대상 없음"}</small>
+    `;
+    button.addEventListener("click", () => attackColor(color));
+    button.addEventListener("mouseenter", () => setColorFocus(color));
+    button.addEventListener("mouseleave", () => setColorFocus(null));
+    button.addEventListener("focus", () => setColorFocus(color));
+    button.addEventListener("blur", () => setColorFocus(null));
+    refs.actionChoices.appendChild(button);
   });
-
-  const breachedNow = state.enemies.filter((enemy) => enemy.row >= BOARD_ROWS).length;
-  state.breached += breachedNow;
-  state.shield -= breachedNow;
-  state.enemies = state.enemies.filter((enemy) => enemy.row < BOARD_ROWS);
-  spawnNextSquad();
-  return breachedNow;
 }
 
-function isRoundClear() {
-  return (
-    state.waveIndex >= ROUND_DATA[state.round].wave.length
-    && state.enemies.length === 0
-  );
+function setColorFocus(color) {
+  document.querySelectorAll(".enemy-unit").forEach((cell) => {
+    cell.classList.toggle("is-focused-target", Boolean(color) && cell.dataset.color === color);
+  });
 }
 
-function finishAction(type, defeatedNow) {
-  state.taps += 1;
-  state.totalTaps += 1;
-  state.actorUse[type] += 1;
-  const breachedNow = advanceEnemies();
-  const actor = ACTOR_META[type];
-  refs.feedbackText.textContent = `${actor.name} ${actor.action} · ${defeatedNow}체 처치`;
-  if (breachedNow > 0) {
-    refs.feedbackText.textContent += ` · ${breachedNow}체 돌파`;
-  }
-  flashDamage();
+function updateCooldownUi(now) {
+  const remaining = Math.max(0, state.cooldownUntil - now);
+  refs.tapCount.textContent = remaining > 0
+    ? `공용 쿨타임 ${(remaining / 1000).toFixed(1)}초`
+    : state.running && !state.paused
+      ? "전체 공격 준비"
+      : "전투 정지";
 
-  const roundClear = isRoundClear();
-  render();
-
-  if (state.shield <= 0) {
-    window.setTimeout(showFailModal, 420);
-    return;
-  }
-
-  if (roundClear) {
-    window.setTimeout(handleRoundClear, 500);
-    return;
-  }
-
-  window.setTimeout(() => {
-    state.locked = false;
-    renderActions();
-  }, 220);
-}
-
-function attackWithWarrior() {
-  if (state.locked) return;
-  const targets = getWarriorTargets();
-  if (!targets.length) return;
-  state.locked = true;
-  targets.forEach((enemy) => damageEnemy(enemy.id, 1));
-  finishAction("warrior", removeDefeatedEnemies());
-}
-
-function attackWithArcher() {
-  if (state.locked) return;
-  const target = getArcherTarget();
-  if (!target) return;
-  state.locked = true;
-  damageEnemy(target.id, 2);
-  finishAction("archer", removeDefeatedEnemies());
+  document.querySelectorAll(".color-button").forEach((button) => {
+    const targetInfo = getColorTargetInfo(button.dataset.color);
+    button.disabled = !state.running || state.paused || remaining > 0 || targetInfo.count === 0;
+    const detail = button.querySelector(".action-detail");
+    if (detail) {
+      detail.textContent = remaining > 0
+        ? `공용 재사용 ${(remaining / 1000).toFixed(1)}초`
+        : targetInfo.count
+          ? `대상 ${targetInfo.count}체 · 최근 ${targetInfo.distance}칸`
+          : "대상 없음";
+    }
+  });
 }
 
 function flashDamage() {
@@ -477,7 +564,6 @@ function flashDamage() {
 }
 
 function handleRoundClear() {
-  state.locked = true;
   if (state.round === ROUND_DATA.length - 1) {
     showResultModal();
   } else {
@@ -486,42 +572,44 @@ function handleRoundClear() {
 }
 
 function showIntroModal() {
-  refs.modalEyebrow.textContent = "4 ROUND SIMPLE PLAYTEST";
-  refs.modalTitle.textContent = "전사와 궁수 중 하나를 고르세요";
+  refs.modalEyebrow.textContent = "4 ROUND REALTIME PLAYTEST";
+  refs.modalTitle.textContent = "전투는 자동, 색 공격은 직접";
   refs.modalBody.innerHTML = `
-    <p>공격 후 적은 모두 아래로 한 칸 전진합니다.</p>
+    <p>적은 실시간으로 이동하고 전사와 궁수는 자동 공격합니다.</p>
     <ul>
-      <li><strong>전사</strong>: 가장 가까운 적 한 줄 전체에 1피해</li>
-      <li><strong>궁수</strong>: 중장형을 우선해 적 하나에게 2피해</li>
-      <li><strong>일반형</strong>: 체력 1</li>
-      <li><strong>중장형</strong>: 체력 2</li>
+      <li>적색·청색·황색 중 하나를 탭하면 같은 색 적 전체에 1피해</li>
+      <li>색 공격 세 개는 하나의 공용 쿨타임을 사용</li>
+      <li>일반형은 1HP, 중장형은 2HP</li>
       <li>적이 방어선을 돌파하면 보호막 1칸 감소</li>
     </ul>
   `;
   refs.modalActions.innerHTML = "";
-  refs.modalActions.appendChild(makePrimaryButton("4라운드 시작", startRun));
+  refs.modalActions.appendChild(makePrimaryButton("실시간 방어 시작", startRun));
   openModal();
 }
 
 function showHelpModal() {
-  const wasLocked = state.locked;
-  state.locked = true;
-  renderActions();
-  refs.modalEyebrow.textContent = "HOW TO PLAY";
-  refs.modalTitle.textContent = "앞줄이 많으면 전사, 중장형은 궁수";
+  const shouldResume = state.running && !state.paused;
+  state.paused = true;
+  render();
+  refs.modalEyebrow.textContent = "HOW TO PLAY · PAUSED";
+  refs.modalTitle.textContent = "가까운 색과 많은 색을 비교하세요";
   refs.modalBody.innerHTML = `
     <ul>
-      <li>⚔ 표시는 이번 전사 공격 대상입니다.</li>
-      <li>➶ 표시는 이번 궁수 공격 대상입니다.</li>
-      <li>공격할 때마다 모든 적이 한 칸 전진합니다.</li>
-      <li>모든 웨이브를 처리하면 라운드가 끝납니다.</li>
+      <li>색 버튼의 대상 수와 가장 가까운 거리를 확인합니다.</li>
+      <li>⚔ 전사는 가장 가까운 적 최대 2체를 자동 공격합니다.</li>
+      <li>➶ 궁수는 중장형을 우선 자동 공격합니다.</li>
+      <li>도움말이 열린 동안 실시간 전투는 정지합니다.</li>
     </ul>
   `;
   refs.modalActions.innerHTML = "";
   refs.modalActions.appendChild(makePrimaryButton("확인", () => {
     closeModal();
-    state.locked = wasLocked;
-    renderActions();
+    if (shouldResume) {
+      state.paused = false;
+      resetTiming();
+    }
+    render();
   }));
   openModal();
 }
@@ -545,7 +633,7 @@ function showRoundClearModal() {
 }
 
 function calculateGrade() {
-  if (state.shield === MAX_SHIELD && state.totalTaps <= 20) return "S";
+  if (state.shield === MAX_SHIELD && state.totalColorAttacks <= 20) return "S";
   if (state.shield >= 2) return "A";
   if (state.shield >= 1) return "B";
   return "C";
@@ -553,16 +641,14 @@ function calculateGrade() {
 
 function showResultModal() {
   const grade = calculateGrade();
-  const dominantTactic = state.actorUse.warrior >= state.actorUse.archer ? "warrior" : "archer";
   refs.modalEyebrow.textContent = "BLOCK A COMPLETE";
   refs.modalTitle.textContent = "빙결 해안 방어 완료";
   refs.modalBody.innerHTML = `
     <div class="result-card">
       <strong>방어 등급</strong>
       <div class="result-grade">${grade}</div>
-      <p>주력 전술: ${ACTOR_META[dominantTactic].symbol} ${ACTOR_META[dominantTactic].name}</p>
-      <p>총 탭 수: ${state.totalTaps} · 잔여 보호막: ${state.shield}</p>
-      <p>전사 ${state.actorUse.warrior}회 · 궁수 ${state.actorUse.archer}회</p>
+      <p>색 전체 공격: ${state.totalColorAttacks}회 · 잔여 보호막: ${state.shield}</p>
+      <p>전사 자동 처치 ${state.autoKills.warrior}체 · 궁수 자동 처치 ${state.autoKills.archer}체</p>
     </div>
   `;
   refs.modalActions.innerHTML = "";
@@ -576,9 +662,9 @@ function showFailModal() {
   refs.modalBody.innerHTML = `
     <div class="result-card">
       <strong>도달 기록</strong>
-      <p>ROUND ${state.round + 1} · 총 탭 ${state.totalTaps}회</p>
+      <p>ROUND ${state.round + 1} · 색 공격 ${state.totalColorAttacks}회</p>
     </div>
-    <p>앞줄이 많이 모이면 전사, 중장형은 궁수로 먼저 제거해 보세요.</p>
+    <p>대상 수가 적더라도 방어선에 가까운 색을 먼저 공격해 보세요.</p>
   `;
   refs.modalActions.innerHTML = "";
   refs.modalActions.appendChild(makePrimaryButton("블록 다시 시작", startRun));
@@ -608,6 +694,8 @@ refs.helpButton.addEventListener("click", showHelpModal);
 document.querySelectorAll("[data-app-version]").forEach((label) => {
   label.textContent = `v${APP_VERSION} · ${APP_VERSION_NAME}`;
 });
+
+window.setInterval(() => gameLoop(performance.now()), 100);
 
 showIntroModal();
 render();
