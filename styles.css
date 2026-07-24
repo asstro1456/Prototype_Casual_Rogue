@@ -93,6 +93,28 @@ h1 {
   font-size: 22px;
 }
 
+.title-lockup {
+  display: grid;
+  justify-items: start;
+}
+
+.header-version,
+.modal-version {
+  display: inline-flex;
+  padding: 3px 6px;
+  border: 1px solid rgba(117, 229, 180, 0.28);
+  border-radius: 6px;
+  color: var(--success);
+  background: rgba(117, 229, 180, 0.07);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.header-version {
+  margin-top: 6px;
+}
+
 .icon-button {
   width: 36px;
   height: 36px;
@@ -781,6 +803,7 @@ h1 {
 }
 
 .modal-panel {
+  position: relative;
   width: min(100%, 430px);
   max-height: calc(100vh - 36px);
   overflow-y: auto;
@@ -789,6 +812,16 @@ h1 {
   border-radius: 24px;
   background: #11182a;
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.56);
+}
+
+.modal-version {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+}
+
+.modal-panel > .eyebrow {
+  padding-right: 116px;
 }
 
 .modal-panel h2 {

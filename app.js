@@ -1,3 +1,6 @@
+const APP_VERSION = "0.1.0";
+const APP_VERSION_NAME = "DUO COMBAT";
+
 const COLOR_META = {
   red: { name: "적색", symbol: "◆" },
   blue: { name: "청색", symbol: "●" },
@@ -808,6 +811,10 @@ function closeModal() {
 }
 
 refs.helpButton.addEventListener("click", showHelpModal);
+
+document.querySelectorAll("[data-app-version]").forEach((label) => {
+  label.textContent = `v${APP_VERSION} · ${APP_VERSION_NAME}`;
+});
 
 showIntroModal();
 render();
