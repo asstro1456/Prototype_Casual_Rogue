@@ -1,4 +1,4 @@
-const APP_VERSION = "0.0.2";
+const APP_VERSION = "0.0.3";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -58,6 +58,7 @@ const refs = {
   floorDisplay: document.querySelector("#floorDisplay"),
   runeProgress: document.querySelector("#runeProgress"),
   enemyCount: document.querySelector("#enemyCount"),
+  experienceCount: document.querySelector("#experienceCount"),
   safeCount: document.querySelector("#safeCount"),
   turnLabel: document.querySelector("#turnLabel"),
   boardGoal: document.querySelector("#boardGoal"),
@@ -80,7 +81,6 @@ const refs = {
 const state = {
   floor: 1,
   runes: [],
-  selectedId: null,
   completedPaths: [],
   claimed: new Set(),
   corrupted: new Set(),
@@ -89,6 +89,8 @@ const state = {
   drawing: false,
   pointerId: null,
   defeated: 0,
+  experience: 0,
+  floorStartExperience: 0,
   running: true,
   modalType: "intro",
 };
@@ -270,10 +272,14 @@ function spawnEnemies() {
   }));
 }
 
-function startFloor(floor) {
+function startFloor(floor, { retry = false } = {}) {
+  if (retry) {
+    state.experience = state.floorStartExperience;
+  } else {
+    state.floorStartExperience = state.experience;
+  }
   state.floor = floor;
   state.runes = chooseRunes();
-  state.selectedId = state.runes[0].instanceId;
   state.completedPaths = [];
   state.claimed = new Set();
   state.corrupted = new Set();
@@ -283,21 +289,20 @@ function startFloor(floor) {
   state.defeated = 0;
   state.running = true;
   spawnEnemies();
-  setFeedback("룬 하나를 고르고 판 위에서 경로를 그리세요.");
+  setFeedback("목록에 있는 룬을 판 위에 바로 그리세요.");
   render();
-}
-
-function selectedRune() {
-  return state.runes.find((rune) => rune.instanceId === state.selectedId) ?? null;
 }
 
 function remainingRunes() {
   return state.runes.filter((rune) => !rune.complete);
 }
 
-function selectNextRune() {
-  const next = remainingRunes().find((rune) => canTemplateFit(rune));
-  state.selectedId = next?.instanceId ?? null;
+function candidateRunesForPath(path) {
+  return remainingRunes().filter(
+    (rune) =>
+      path.length <= rune.points.length &&
+      isRunePrefix(path, rune),
+  );
 }
 
 function miniRuneSvg(rune) {
@@ -319,6 +324,7 @@ function renderStatus() {
   const complete = state.runes.filter((rune) => rune.complete).length;
   refs.floorDisplay.textContent = `FLOOR ${String(state.floor).padStart(2, "0")}`;
   refs.enemyCount.textContent = String(state.enemies.length);
+  refs.experienceCount.textContent = String(state.experience);
   refs.safeCount.textContent = String(
     BOARD_SIZE * BOARD_SIZE - state.claimed.size - state.corrupted.size,
   );
@@ -328,13 +334,11 @@ function renderStatus() {
     (_, index) => `<i class="${index < complete ? "is-complete" : ""}"></i>`,
   ).join("");
 
-  const rune = selectedRune();
-  refs.turnLabel.textContent = rune
-    ? `${complete + 1}번째 룬 · ${rune.name}`
-    : "룬 선택 대기";
-  refs.boardGoal.textContent = rune
-    ? `${rune.hint} · ${rune.points.length}칸을 정확히 연결`
-    : "남은 공간을 확인하세요";
+  refs.turnLabel.textContent = "자동 룬 인식";
+  refs.boardGoal.textContent =
+    complete < RUNES_PER_FLOOR
+      ? `남은 룬 ${RUNES_PER_FLOOR - complete}개 중 하나를 그리세요`
+      : "모든 룬 완성";
 }
 
 function renderBoard() {
@@ -389,22 +393,18 @@ function renderRuneChoices() {
     .map((rune) => {
       const canFit = rune.complete ? true : canTemplateFit(rune);
       const classes = ["rune-card"];
-      if (rune.instanceId === state.selectedId) classes.push("is-selected");
       if (rune.complete) classes.push("is-complete");
       if (!canFit) classes.push("is-impossible");
       const status = rune.complete ? "완성" : canFit ? `${rune.points.length}칸` : "배치 불가";
       return `
-        <button
+        <div
           class="${classes.join(" ")}"
-          type="button"
-          data-rune-id="${rune.instanceId}"
           style="color:${rune.complete ? "#72dca9" : rune.color}"
-          ${rune.complete || !canFit || !state.running ? "disabled" : ""}
         >
           ${miniRuneSvg(rune)}
           <b>${rune.name}</b>
           <small>${status}</small>
-        </button>
+        </div>
       `;
     })
     .join("");
@@ -421,20 +421,6 @@ function setFeedback(message, tone = "") {
   refs.feedback.className = `feedback${tone ? ` is-${tone}` : ""}`;
 }
 
-function selectRune(instanceId) {
-  if (!state.running || state.drawing) {
-    return;
-  }
-  const rune = state.runes.find((entry) => entry.instanceId === instanceId);
-  if (!rune || rune.complete || !canTemplateFit(rune)) {
-    return;
-  }
-  state.selectedId = rune.instanceId;
-  setFeedback(`${rune.name}: ${rune.hint} 모양을 ${rune.points.length}칸으로 그리세요.`);
-  renderStatus();
-  renderRuneChoices();
-}
-
 function cellFromPointer(event) {
   const rect = refs.board.getBoundingClientRect();
   const x = event.clientX - rect.left;
@@ -449,16 +435,21 @@ function cellFromPointer(event) {
 }
 
 function diagonalPriorityCell(event) {
-  const rune = selectedRune();
   const last = state.currentPath[state.currentPath.length - 1];
-  if (!rune || !last) {
+  if (!last) {
     return null;
   }
 
-  const diagonalSteps = getNextStepCandidates(state.currentPath, rune).filter(
-    ([colDelta, rowDelta]) =>
-      Math.abs(colDelta) === 1 && Math.abs(rowDelta) === 1,
-  );
+  const diagonalStepsByKey = new Map();
+  candidateRunesForPath(state.currentPath).forEach((rune) => {
+    getNextStepCandidates(state.currentPath, rune)
+      .filter(
+        ([colDelta, rowDelta]) =>
+          Math.abs(colDelta) === 1 && Math.abs(rowDelta) === 1,
+      )
+      .forEach((step) => diagonalStepsByKey.set(step.join(","), step));
+  });
+  const diagonalSteps = [...diagonalStepsByKey.values()];
   if (diagonalSteps.length === 0) {
     return null;
   }
@@ -468,7 +459,7 @@ function diagonalPriorityCell(event) {
   const pointerRow = ((event.clientY - rect.top) / rect.height) * BOARD_SIZE;
   const colMotion = pointerCol - (last.col + 0.5);
   const rowMotion = pointerRow - (last.row + 0.5);
-  const snapThreshold = 0.28;
+  const snapThreshold = 0.16;
 
   const preferred = diagonalSteps
     .filter(
@@ -519,13 +510,6 @@ function isOrthogonalStep(a, b) {
   return Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1;
 }
 
-function isDiagonalStep(a, b) {
-  return (
-    Math.abs(a.row - b.row) === 1 &&
-    Math.abs(a.col - b.col) === 1
-  );
-}
-
 function sameCell(a, b) {
   return a?.row === b?.row && a?.col === b?.col;
 }
@@ -547,22 +531,6 @@ function appendDrawingCell(cell) {
     return;
   }
 
-  const rune = selectedRune();
-  const previous = path[path.length - 2];
-  if (
-    rune &&
-    previous &&
-    isOrthogonalStep(previous, last) &&
-    isDiagonalStep(previous, cell)
-  ) {
-    const correctedPath = [...path.slice(0, -1), cell];
-    if (isRunePrefix(correctedPath, rune)) {
-      path[path.length - 1] = cell;
-      renderBoard();
-      return;
-    }
-  }
-
   if (last && !isAdjacent(last, cell)) {
     return;
   }
@@ -571,11 +539,18 @@ function appendDrawingCell(cell) {
     return;
   }
 
-  if (!rune || path.length >= rune.points.length) {
+  const candidateRunes = candidateRunesForPath(path);
+  const maxLength = Math.max(
+    0,
+    ...remainingRunes().map((rune) => rune.points.length),
+  );
+  if (path.length >= maxLength) {
     return;
   }
 
-  const nextSteps = getNextStepCandidates(path, rune);
+  const nextSteps = candidateRunes.flatMap((rune) =>
+    getNextStepCandidates(path, rune),
+  );
   const diagonalOnly =
     nextSteps.length > 0 &&
     nextSteps.every(
@@ -591,7 +566,7 @@ function appendDrawingCell(cell) {
 }
 
 function beginDrawing(event) {
-  if (!state.running || state.drawing || !selectedRune()) {
+  if (!state.running || state.drawing || remainingRunes().length === 0) {
     return;
   }
   const cell = cellFromPointer(event);
@@ -632,17 +607,11 @@ function finishDrawing(event) {
   state.drawing = false;
   state.pointerId = null;
 
-  const rune = selectedRune();
-  if (!rune || state.currentPath.length !== rune.points.length) {
-    const needed = rune ? rune.points.length : 0;
-    setFeedback(`${needed}칸을 끝까지 이어야 합니다. 다시 그려보세요.`, "alert");
-    state.currentPath = [];
-    renderBoard();
-    return;
-  }
-
-  if (!matchesRune(state.currentPath, rune)) {
-    setFeedback(`${rune.hint} 모양과 다릅니다. 회전은 가능하지만 궤적은 같아야 합니다.`, "alert");
+  const rune = remainingRunes().find((entry) =>
+    matchesRune(state.currentPath, entry),
+  );
+  if (!rune) {
+    setFeedback("목록의 남은 룬과 일치하지 않습니다. 다시 그려보세요.", "alert");
     state.currentPath = [];
     renderBoard();
     return;
@@ -739,12 +708,12 @@ function commitRune(rune, path) {
   );
   const defeatedNow = before - state.enemies.length;
   state.defeated += defeatedNow;
+  state.experience += defeatedNow;
 
   if (remainingRunes().length === 0) {
     state.running = false;
-    state.selectedId = null;
     setFeedback(
-      `네 개의 룬이 공명했습니다. 적 ${defeatedNow}체를 베고 층의 문을 열었습니다.`,
+      `네 개의 룬이 공명했습니다. 적 ${defeatedNow}체를 베고 EXP ${defeatedNow}을 얻었습니다.`,
       "success",
     );
     render();
@@ -754,19 +723,20 @@ function commitRune(rune, path) {
 
   moveEnemies();
   const corruptedNow = corruptCells();
-  selectNextRune();
 
   const fittingRunes = remainingRunes().filter((entry) => canTemplateFit(entry));
   if (fittingRunes.length === 0) {
     state.running = false;
-    state.selectedId = null;
     setFeedback("오염으로 남은 룬을 놓을 공간이 사라졌습니다.", "alert");
     render();
     window.setTimeout(showFailModal, 260);
     return;
   }
 
-  const killCopy = defeatedNow > 0 ? `적 ${defeatedNow}체 제거, ` : "";
+  const killCopy =
+    defeatedNow > 0
+      ? `적 ${defeatedNow}체 제거 · EXP +${defeatedNow}, `
+      : "";
   setFeedback(
     `${rune.name} 완성! ${killCopy}빈 칸 ${corruptedNow}곳이 오염됐습니다.`,
     "success",
@@ -807,8 +777,8 @@ function rulesMarkup() {
   return `
     <p>적을 전부 쓰러뜨리는 대신, <strong>제시된 룬 네 개를 모두 그리면</strong> 층을 통과합니다.</p>
     <div class="rule-list">
-      <div class="rule"><b>1</b><span>아래에서 룬을 고르고 판 위에 같은 궤적을 그립니다.</span></div>
-      <div class="rule"><b>2</b><span>룬은 회전·좌우 반전 가능하며, 지나간 적은 제거됩니다.</span></div>
+      <div class="rule"><b>1</b><span>왼쪽 목록의 룬 중 하나를 그리면 자동으로 인식됩니다.</span></div>
+      <div class="rule"><b>2</b><span>룬은 회전·좌우 반전 가능하며, 지나간 적을 처치하면 EXP를 얻습니다.</span></div>
       <div class="rule"><b>3</b><span>살아남은 적은 이동하고 최대 3개의 빈 칸을 오염시킵니다.</span></div>
       <div class="rule"><b>4</b><span>완성 룬과 오염 칸은 다시 쓸 수 없습니다. 네 룬의 자리를 남겨두세요.</span></div>
     </div>
@@ -856,8 +826,8 @@ function showClearModal() {
     body: `
       <p>적을 모두 쓰러뜨리지 않아도 네 개의 궤적이 탑의 문을 열었습니다.</p>
       <div class="result-grid">
-        <div><span>완성 룬</span><strong>4</strong></div>
         <div><span>처치</span><strong>${state.defeated}</strong></div>
+        <div><span>획득 EXP</span><strong>+${state.defeated}</strong></div>
         <div><span>생존 적</span><strong>${state.enemies.length}</strong></div>
       </div>
     `,
@@ -866,7 +836,7 @@ function showClearModal() {
         label: "이 층 다시",
         onClick: () => {
           closeModal();
-          startFloor(state.floor);
+          startFloor(state.floor, { retry: true });
         },
       },
       {
@@ -890,7 +860,7 @@ function showFailModal() {
       <p>살아남은 적의 오염이 남은 룬 경로를 막았습니다. 룬으로 적을 더 많이 베거나, 완성 경로의 위치를 바꿔보세요.</p>
       <div class="result-grid">
         <div><span>완성 룬</span><strong>${state.completedPaths.length}</strong></div>
-        <div><span>처치</span><strong>${state.defeated}</strong></div>
+        <div><span>획득 EXP</span><strong>+${state.defeated}</strong></div>
         <div><span>오염 칸</span><strong>${state.corrupted.size}</strong></div>
       </div>
     `,
@@ -900,17 +870,12 @@ function showFailModal() {
         primary: true,
         onClick: () => {
           closeModal();
-          startFloor(state.floor);
+          startFloor(state.floor, { retry: true });
         },
       },
     ],
   });
 }
-
-refs.runeChoices.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-rune-id]");
-  if (button) selectRune(button.dataset.runeId);
-});
 
 refs.board.addEventListener("pointerdown", beginDrawing);
 refs.board.addEventListener("pointermove", continueDrawing);

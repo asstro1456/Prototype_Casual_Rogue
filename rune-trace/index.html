@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="theme-color" content="#101d38">
   <title>프리즘 리콜 — 룬 트레이스</title>
-  <link rel="stylesheet" href="./styles.css?v=0.0.2">
+  <link rel="stylesheet" href="./styles.css?v=0.0.3">
 </head>
 <body>
   <main class="app-shell">
     <section class="game-card" aria-label="룬 트레이스 게임 화면">
       <header class="topbar">
         <a class="header-version" href="../index.html" aria-label="프로토타입 허브로 돌아가기">
-          <span data-app-version>v0.0.2</span>
+          <span data-app-version>v0.0.3</span>
           <small>← HUB</small>
         </a>
         <div class="title-lockup">
@@ -30,6 +30,7 @@
         <div id="runeProgress" class="rune-progress" aria-label="완성한 룬"></div>
         <div class="status-counts">
           <span>적 <b id="enemyCount">0</b></span>
+          <span>EXP <b id="experienceCount">0</b></span>
           <span>빈 칸 <b id="safeCount">49</b></span>
         </div>
       </section>
@@ -42,40 +43,42 @@
           <i class="cloud cloud-b"></i>
         </div>
 
-        <div class="board-frame">
-          <div class="board-caption">
-            <span id="turnLabel">첫 번째 룬</span>
-            <strong id="boardGoal">빛나는 칸을 이어 룬을 새기세요</strong>
-          </div>
-          <div id="runeBoard" class="rune-board" role="application" aria-label="7×7 룬 판">
-            <div id="gridCells" class="grid-cells" aria-hidden="true"></div>
-            <svg id="pathLayer" class="path-layer" viewBox="0 0 7 7" aria-hidden="true"></svg>
-          </div>
-          <div class="board-legend" aria-hidden="true">
-            <span><i class="legend-enemy"></i>적</span>
-            <span><i class="legend-corrupt"></i>오염</span>
-            <span><i class="legend-rune"></i>완성 룬</span>
-          </div>
-        </div>
-      </section>
+        <div class="play-layout">
+          <section class="rune-panel" aria-label="이번 층의 룬 목록">
+            <div class="section-heading">
+              <span>룬 목록</span>
+              <strong id="completeCount">0 / 4</strong>
+            </div>
+            <div id="runeChoices" class="rune-choices"></div>
+            <small class="rune-note">회전·반전 가능</small>
+          </section>
 
-      <section class="rune-panel">
-        <div class="section-heading">
-          <div>
-            <span>이번 층의 룬</span>
-            <small>회전·좌우 반전 가능</small>
+          <div class="board-column">
+            <div class="board-frame">
+              <div class="board-caption">
+                <span id="turnLabel">자동 룬 인식</span>
+                <strong id="boardGoal">목록 중 하나를 그리세요</strong>
+              </div>
+              <div id="runeBoard" class="rune-board" role="application" aria-label="7×7 룬 판">
+                <div id="gridCells" class="grid-cells" aria-hidden="true"></div>
+                <svg id="pathLayer" class="path-layer" viewBox="0 0 7 7" aria-hidden="true"></svg>
+              </div>
+              <div class="board-legend" aria-hidden="true">
+                <span><i class="legend-enemy"></i>적</span>
+                <span><i class="legend-corrupt"></i>오염</span>
+                <span><i class="legend-rune"></i>완성 룬</span>
+              </div>
+            </div>
+            <p id="feedbackText" class="feedback" role="status">목록에 있는 룬을 판 위에 바로 그리세요.</p>
           </div>
-          <strong id="completeCount">0 / 4</strong>
         </div>
-        <div id="runeChoices" class="rune-choices" aria-label="그릴 룬 선택"></div>
-        <p id="feedbackText" class="feedback" role="status">룬 하나를 고르고 판 위에서 경로를 그리세요.</p>
       </section>
     </section>
   </main>
 
   <div id="modalBackdrop" class="modal-backdrop is-open">
     <section id="modalPanel" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
-      <span class="modal-version" data-app-version>v0.0.2 · RUNE TRACE</span>
+      <span class="modal-version" data-app-version>v0.0.3 · RUNE TRACE</span>
       <button id="modalClose" class="modal-close" type="button" aria-label="도움말 닫기">×</button>
       <p id="modalEyebrow" class="modal-eyebrow">NEW PROTOTYPE</p>
       <h2 id="modalTitle">네 개의 룬으로<br>탑의 문을 여세요</h2>
@@ -84,6 +87,6 @@
     </section>
   </div>
 
-  <script src="./app.js?v=0.0.2"></script>
+  <script src="./app.js?v=0.0.3"></script>
 </body>
 </html>
