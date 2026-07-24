@@ -177,10 +177,11 @@ body {
 
 .status-counts {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 11px;
+  gap: 4px 10px;
   color: #7f91a9;
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .status-counts b {
@@ -645,6 +646,58 @@ body {
   color: #83e7c0;
 }
 
+.board-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.board-actions button {
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid rgba(143, 207, 239, .16);
+  border-radius: 10px;
+  color: #9fb5ca;
+  font-size: 9px;
+  font-weight: 800;
+  background: rgba(9, 24, 47, .72);
+  cursor: pointer;
+}
+
+.board-actions button:hover:not(:disabled),
+.board-actions button:focus-visible:not(:disabled) {
+  outline: none;
+  border-color: rgba(116, 220, 255, .55);
+  color: #d9f5ff;
+  background: rgba(28, 66, 96, .7);
+}
+
+.board-actions button:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.ability-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+  min-height: 22px;
+  margin-top: 8px;
+  color: #617792;
+  font-size: 8px;
+  text-align: center;
+}
+
+.ability-list span {
+  padding: 4px 7px;
+  border: 1px solid rgba(119, 218, 255, .15);
+  border-radius: 20px;
+  color: #85bed4;
+  background: rgba(27, 67, 91, .35);
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -773,10 +826,44 @@ body {
   font-size: 20px;
 }
 
+.level-preview {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding: 13px 15px;
+  border: 1px solid rgba(128, 220, 255, .16);
+  border-radius: 14px;
+  background: rgba(8, 24, 45, .5);
+}
+
+.level-preview span {
+  color: #7890aa;
+  font-size: 10px;
+}
+
+.level-preview strong {
+  color: #87e5ff;
+  font-size: 17px;
+}
+
 .modal-actions {
   display: flex;
   gap: 9px;
   margin-top: 22px;
+}
+
+.modal-panel[data-modal-type="levelup"] .modal-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.modal-panel[data-modal-type="levelup"] .modal-actions button {
+  min-height: 52px;
+  border-color: rgba(119, 219, 255, .26);
+  color: #d8f6ff;
+  font-size: 13px;
+  background: linear-gradient(135deg, rgba(37, 81, 112, .8), rgba(20, 43, 76, .86));
 }
 
 .modal-actions button {

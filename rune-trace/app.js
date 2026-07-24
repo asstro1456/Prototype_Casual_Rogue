@@ -1,7 +1,9 @@
-const APP_VERSION = "0.0.4";
+const APP_VERSION = "0.0.5";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
+const EXPERIENCE_PER_LEVEL = 3;
+const DUMMY_ABILITIES = ["능력 1", "능력 2", "능력 3"];
 
 const RUNE_TEMPLATES = [
   {
@@ -57,6 +59,7 @@ const TRANSFORMS = [
 const refs = {
   floorDisplay: document.querySelector("#floorDisplay"),
   runeProgress: document.querySelector("#runeProgress"),
+  levelCount: document.querySelector("#levelCount"),
   enemyCount: document.querySelector("#enemyCount"),
   experienceCount: document.querySelector("#experienceCount"),
   safeCount: document.querySelector("#safeCount"),
@@ -68,6 +71,9 @@ const refs = {
   runeChoices: document.querySelector("#runeChoices"),
   completeCount: document.querySelector("#completeCount"),
   feedback: document.querySelector("#feedbackText"),
+  undoButton: document.querySelector("#undoButton"),
+  resetButton: document.querySelector("#resetButton"),
+  abilityList: document.querySelector("#abilityList"),
   helpButton: document.querySelector("#helpButton"),
   modalBackdrop: document.querySelector("#modalBackdrop"),
   modalPanel: document.querySelector("#modalPanel"),
@@ -90,7 +96,15 @@ const state = {
   pointerId: null,
   defeated: 0,
   experience: 0,
+  level: 1,
+  abilities: [],
   floorStartExperience: 0,
+  floorStartLevel: 1,
+  floorStartAbilities: [],
+  pendingLevelUps: 0,
+  pendingOutcome: null,
+  history: [],
+  floorInitialSnapshot: null,
   running: true,
   modalType: "intro",
 };
@@ -272,11 +286,62 @@ function spawnEnemies() {
   }));
 }
 
+function createStateSnapshot() {
+  return {
+    runes: state.runes.map((rune) => ({
+      ...rune,
+      points: rune.points.map((point) => [...point]),
+    })),
+    completedPaths: state.completedPaths.map((entry) => ({
+      ...entry,
+      path: entry.path.map((point) => ({ ...point })),
+    })),
+    claimed: [...state.claimed],
+    corrupted: [...state.corrupted],
+    enemies: state.enemies.map((enemy) => ({ ...enemy })),
+    defeated: state.defeated,
+    experience: state.experience,
+    level: state.level,
+    abilities: [...state.abilities],
+    pendingLevelUps: state.pendingLevelUps,
+    pendingOutcome: state.pendingOutcome,
+    running: state.running,
+  };
+}
+
+function restoreStateSnapshot(snapshot) {
+  state.runes = snapshot.runes.map((rune) => ({
+    ...rune,
+    points: rune.points.map((point) => [...point]),
+  }));
+  state.completedPaths = snapshot.completedPaths.map((entry) => ({
+    ...entry,
+    path: entry.path.map((point) => ({ ...point })),
+  }));
+  state.claimed = new Set(snapshot.claimed);
+  state.corrupted = new Set(snapshot.corrupted);
+  state.enemies = snapshot.enemies.map((enemy) => ({ ...enemy }));
+  state.defeated = snapshot.defeated;
+  state.experience = snapshot.experience;
+  state.level = snapshot.level;
+  state.abilities = [...snapshot.abilities];
+  state.pendingLevelUps = snapshot.pendingLevelUps;
+  state.pendingOutcome = snapshot.pendingOutcome;
+  state.running = snapshot.running;
+  state.currentPath = [];
+  state.drawing = false;
+  state.pointerId = null;
+}
+
 function startFloor(floor, { retry = false } = {}) {
   if (retry) {
     state.experience = state.floorStartExperience;
+    state.level = state.floorStartLevel;
+    state.abilities = [...state.floorStartAbilities];
   } else {
     state.floorStartExperience = state.experience;
+    state.floorStartLevel = state.level;
+    state.floorStartAbilities = [...state.abilities];
   }
   state.floor = floor;
   state.runes = chooseRunes();
@@ -287,9 +352,40 @@ function startFloor(floor, { retry = false } = {}) {
   state.drawing = false;
   state.pointerId = null;
   state.defeated = 0;
+  state.pendingLevelUps = 0;
+  state.pendingOutcome = null;
+  state.history = [];
   state.running = true;
   spawnEnemies();
+  state.floorInitialSnapshot = createStateSnapshot();
   setFeedback("목록에 있는 룬을 판 위에 바로 그리세요.");
+  render();
+}
+
+function undoLastRune() {
+  const snapshot = state.history.pop();
+  if (!snapshot) {
+    setFeedback("되돌릴 완성 룬이 없습니다.", "alert");
+    return;
+  }
+  restoreStateSnapshot(snapshot);
+  state.running = true;
+  state.pendingLevelUps = 0;
+  state.pendingOutcome = null;
+  setFeedback("마지막 룬을 그리기 전 상태로 되돌렸습니다.", "success");
+  render();
+}
+
+function resetFloor() {
+  if (!state.floorInitialSnapshot) {
+    return;
+  }
+  restoreStateSnapshot(state.floorInitialSnapshot);
+  state.history = [];
+  state.running = true;
+  state.pendingLevelUps = 0;
+  state.pendingOutcome = null;
+  setFeedback("현재 층을 최초 배치로 초기화했습니다.");
   render();
 }
 
@@ -339,9 +435,12 @@ function miniRuneSvg(rune) {
 
 function renderStatus() {
   const complete = state.runes.filter((rune) => rune.complete).length;
+  const levelExperience =
+    state.experience - (state.level - 1) * EXPERIENCE_PER_LEVEL;
   refs.floorDisplay.textContent = `FLOOR ${String(state.floor).padStart(2, "0")}`;
+  refs.levelCount.textContent = String(state.level);
   refs.enemyCount.textContent = String(state.enemies.length);
-  refs.experienceCount.textContent = String(state.experience);
+  refs.experienceCount.textContent = `${levelExperience} / ${EXPERIENCE_PER_LEVEL}`;
   refs.safeCount.textContent = String(
     BOARD_SIZE * BOARD_SIZE - state.claimed.size - state.corrupted.size,
   );
@@ -356,6 +455,27 @@ function renderStatus() {
     complete < RUNES_PER_FLOOR
       ? `남은 룬 ${RUNES_PER_FLOOR - complete}개 중 하나를 그리세요`
       : "모든 룬 완성";
+}
+
+function renderRunControls() {
+  refs.undoButton.disabled = state.history.length === 0;
+  refs.resetButton.disabled = !state.floorInitialSnapshot;
+
+  if (state.abilities.length === 0) {
+    refs.abilityList.textContent = "획득 능력 없음";
+    return;
+  }
+
+  const counts = state.abilities.reduce((result, ability) => {
+    result.set(ability, (result.get(ability) ?? 0) + 1);
+    return result;
+  }, new Map());
+  refs.abilityList.innerHTML = [...counts]
+    .map(
+      ([ability, count]) =>
+        `<span>${ability}${count > 1 ? ` ×${count}` : ""}</span>`,
+    )
+    .join("");
 }
 
 function renderBoard() {
@@ -431,6 +551,7 @@ function render() {
   renderStatus();
   renderBoard();
   renderRuneChoices();
+  renderRunControls();
 }
 
 function setFeedback(message, tone = "") {
@@ -708,7 +829,32 @@ function corruptCells() {
   return corruptedNow;
 }
 
+function grantExperience(amount) {
+  state.experience += amount;
+  while (state.experience >= state.level * EXPERIENCE_PER_LEVEL) {
+    state.level += 1;
+    state.pendingLevelUps += 1;
+  }
+}
+
+function resolveQueuedModal() {
+  if (state.pendingLevelUps > 0) {
+    showLevelUpModal();
+    return;
+  }
+  if (state.pendingOutcome === "clear") {
+    state.pendingOutcome = null;
+    showClearModal();
+    return;
+  }
+  if (state.pendingOutcome === "fail") {
+    state.pendingOutcome = null;
+    showFailModal();
+  }
+}
+
 function commitRune(rune, path) {
+  state.history.push(createStateSnapshot());
   const pathKeys = new Set(path.map(({ row, col }) => cellKey(row, col)));
   pathKeys.forEach((key) => state.claimed.add(key));
   rune.complete = true;
@@ -725,16 +871,17 @@ function commitRune(rune, path) {
   );
   const defeatedNow = before - state.enemies.length;
   state.defeated += defeatedNow;
-  state.experience += defeatedNow;
+  grantExperience(defeatedNow);
 
   if (remainingRunes().length === 0) {
     state.running = false;
+    state.pendingOutcome = "clear";
     setFeedback(
       `네 개의 룬이 공명했습니다. 적 ${defeatedNow}체를 베고 EXP ${defeatedNow}을 얻었습니다.`,
       "success",
     );
     render();
-    window.setTimeout(showClearModal, 260);
+    window.setTimeout(resolveQueuedModal, 260);
     return;
   }
 
@@ -744,9 +891,10 @@ function commitRune(rune, path) {
   const fittingRunes = remainingRunes().filter((entry) => canTemplateFit(entry));
   if (fittingRunes.length === 0) {
     state.running = false;
+    state.pendingOutcome = "fail";
     setFeedback("오염으로 남은 룬을 놓을 공간이 사라졌습니다.", "alert");
     render();
-    window.setTimeout(showFailModal, 260);
+    window.setTimeout(resolveQueuedModal, 260);
     return;
   }
 
@@ -759,6 +907,9 @@ function commitRune(rune, path) {
     "success",
   );
   render();
+  if (state.pendingLevelUps > 0) {
+    window.setTimeout(resolveQueuedModal, 260);
+  }
 }
 
 function makeAction(label, onClick, primary = false) {
@@ -772,6 +923,7 @@ function makeAction(label, onClick, primary = false) {
 
 function openModal({ type, eyebrow, title, body, actions }) {
   state.modalType = type;
+  refs.modalPanel.dataset.modalType = type;
   refs.modalEyebrow.textContent = eyebrow;
   refs.modalTitle.innerHTML = title;
   refs.modalBody.innerHTML = body;
@@ -787,7 +939,34 @@ function openModal({ type, eyebrow, title, body, actions }) {
 
 function closeModal() {
   refs.modalBackdrop.classList.remove("is-open");
+  refs.modalPanel.dataset.modalType = "";
+  state.modalType = null;
   refs.helpButton.focus({ preventScroll: true });
+}
+
+function completeLevelUp(ability = null) {
+  const resolvedLevel = state.level - state.pendingLevelUps + 1;
+  if (ability) {
+    state.abilities.push(ability);
+  }
+  state.pendingLevelUps = Math.max(0, state.pendingLevelUps - 1);
+  closeModal();
+  setFeedback(
+    ability
+      ? `LEVEL ${resolvedLevel} · ${ability}을 획득했습니다.`
+      : `LEVEL ${resolvedLevel} · 능력 선택을 건너뛰었습니다.`,
+    "success",
+  );
+  render();
+  window.setTimeout(resolveQueuedModal, 0);
+}
+
+function requestModalClose() {
+  if (state.modalType === "levelup") {
+    completeLevelUp();
+    return;
+  }
+  closeModal();
 }
 
 function rulesMarkup() {
@@ -799,7 +978,7 @@ function rulesMarkup() {
       <div class="rule"><b>3</b><span>살아남은 적은 이동하고 최대 3개의 빈 칸을 오염시킵니다.</span></div>
       <div class="rule"><b>4</b><span>완성 룬과 오염 칸은 다시 쓸 수 없습니다. 네 룬의 자리를 남겨두세요.</span></div>
     </div>
-    <p>선을 잘못 그리면 소모 없이 다시 시도할 수 있습니다.</p>
+    <p>EXP ${EXPERIENCE_PER_LEVEL}마다 레벨이 오릅니다. 막혔다면 한 수를 되돌리거나 층을 초기화할 수 있습니다.</p>
   `;
 }
 
@@ -835,6 +1014,26 @@ function showHelpModal() {
   });
 }
 
+function showLevelUpModal() {
+  const targetLevel = state.level - state.pendingLevelUps + 1;
+  openModal({
+    type: "levelup",
+    eyebrow: `LEVEL ${targetLevel} REACHED`,
+    title: "능력을 하나<br>선택하세요",
+    body: `
+      <p>능력 효과는 아직 정하지 않았습니다. 이번 프로토타입에서는 획득 기록만 남습니다.</p>
+      <div class="level-preview">
+        <span>현재 레벨</span>
+        <strong>LV ${targetLevel}</strong>
+      </div>
+    `,
+    actions: DUMMY_ABILITIES.map((ability) => ({
+      label: ability,
+      onClick: () => completeLevelUp(ability),
+    })),
+  });
+}
+
 function showClearModal() {
   openModal({
     type: "clear",
@@ -853,7 +1052,7 @@ function showClearModal() {
         label: "이 층 다시",
         onClick: () => {
           closeModal();
-          startFloor(state.floor, { retry: true });
+          resetFloor();
         },
       },
       {
@@ -887,7 +1086,7 @@ function showFailModal() {
         primary: true,
         onClick: () => {
           closeModal();
-          startFloor(state.floor, { retry: true });
+          resetFloor();
         },
       },
     ],
@@ -902,11 +1101,13 @@ refs.board.addEventListener("lostpointercapture", () => {
   if (state.drawing) cancelDrawing();
 });
 
+refs.undoButton.addEventListener("click", undoLastRune);
+refs.resetButton.addEventListener("click", resetFloor);
 refs.helpButton.addEventListener("click", showHelpModal);
-refs.modalClose.addEventListener("click", closeModal);
+refs.modalClose.addEventListener("click", requestModalClose);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && refs.modalBackdrop.classList.contains("is-open")) {
-    closeModal();
+    requestModalClose();
   }
 });
 
