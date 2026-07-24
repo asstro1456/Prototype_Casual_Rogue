@@ -1,4 +1,4 @@
-const APP_VERSION = "0.0.3";
+const APP_VERSION = "0.0.4";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -310,12 +310,29 @@ function miniRuneSvg(rune) {
   const maxX = Math.max(...rune.points.map(([x]) => x));
   const minY = Math.min(...rune.points.map(([, y]) => y));
   const maxY = Math.max(...rune.points.map(([, y]) => y));
-  const points = rune.points
-    .map(([x, y]) => `${x - minX + 0.5},${y - minY + 0.5}`)
-    .join(" ");
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
+  const drawableSize = 32;
+  const scaleX = spanX > 0 ? drawableSize / spanX : Number.POSITIVE_INFINITY;
+  const scaleY = spanY > 0 ? drawableSize / spanY : Number.POSITIVE_INFINITY;
+  const scale = Math.min(scaleX, scaleY);
+  const offsetX = (48 - spanX * scale) / 2 - minX * scale;
+  const offsetY = (48 - spanY * scale) / 2 - minY * scale;
+  const previewPoints = rune.points.map(([x, y]) => ({
+    x: x * scale + offsetX,
+    y: y * scale + offsetY,
+  }));
+  const points = previewPoints.map(({ x, y }) => `${x},${y}`).join(" ");
+  const nodes = previewPoints
+    .map(({ x, y }, index) => {
+      const endpoint = index === 0 || index === previewPoints.length - 1;
+      return `<circle class="rune-node${endpoint ? " is-endpoint" : ""}" cx="${x}" cy="${y}" r="${endpoint ? 3.8 : 2.8}"></circle>`;
+    })
+    .join("");
   return `
-    <svg class="rune-mini" viewBox="0 0 ${maxX - minX + 1} ${maxY - minY + 1}" aria-hidden="true">
+    <svg class="rune-mini" viewBox="0 0 48 48" aria-hidden="true">
       <polyline points="${points}"></polyline>
+      ${nodes}
     </svg>
   `;
 }
