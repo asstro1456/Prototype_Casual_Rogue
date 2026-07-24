@@ -4,89 +4,94 @@ const COLOR_META = {
   yellow: { name: "황색", symbol: "▲" },
 };
 
+const ACTOR_META = {
+  melee: { name: "근접", action: "베기", symbol: "⚔" },
+  archer: { name: "궁수", action: "관통", symbol: "➶" },
+  duo: { name: "연계", action: "교차 공격", symbol: "✦" },
+};
+
 const MAX_SHIELD = 3;
+const BOARD_SIZE = 5;
+const BASE_LINK_THRESHOLD = 3;
+const BASE_PIERCE_DEPTH = 2;
 
 const ROUND_DATA = [
   {
     name: "기억체 01",
-    pattern: "온보딩형",
-    goal: "2색 결정로 기본 공격을 익힙니다.",
-    colors: ["red", "blue"],
+    pattern: "교대 훈련",
+    goal: "넓은 덩어리는 베고, 두꺼운 결정은 관통하세요.",
     threshold: 6,
     stacks: [
-      "R", "B", "RR", "B", "R",
-      "B", "RB", "R", "BR", "B",
-      "R", "B", "RR", "B", "R",
-      "B", "R", "BR", "R", "B",
-      "R", "B", "R", "B", "R",
+      "R", "R", "RB", "B", "B",
+      "R", "RR", "RB", "B", "BB",
+      "R", "R", "B", "B", "B",
+      "B", "BR", "B", "R", "R",
+      "B", "B", "BR", "R", "RR",
     ],
     nextIntel: "혼합형 · 3색 등장 · 반격 6탭",
   },
   {
     name: "기억체 02",
-    pattern: "규칙 변형",
-    goal: "3색과 반격 게이지를 함께 관리합니다.",
-    colors: ["red", "blue", "yellow"],
+    pattern: "삼색 혼합",
+    goal: "공격 위치와 다음에 드러날 색을 함께 판단하세요.",
     threshold: 6,
     stacks: [
-      "RY", "B", "YB", "R", "BR",
-      "Y", "RB", "Y", "BY", "R",
-      "B", "YR", "R", "BB", "Y",
-      "RY", "B", "Y", "RB", "B",
-      "Y", "R", "BY", "R", "Y",
+      "RY", "R", "B", "BY", "B",
+      "R", "RY", "B", "B", "YB",
+      "Y", "YB", "BR", "R", "YR",
+      "Y", "B", "BR", "R", "R",
+      "BY", "B", "Y", "Y", "RY",
     ],
-    nextIntel: "분산형 · 황색 비중 높음 · 반격 5탭",
+    nextIntel: "분산형 · 작은 덩어리 증가 · 반격 5탭",
   },
   {
     name: "기억체 03",
-    pattern: "압박형",
-    goal: "획득한 능력으로 분산된 결정을 효율화합니다.",
-    colors: ["red", "blue", "yellow"],
+    pattern: "분산 압박",
+    goal: "교대 공격으로 연계를 준비해 행동 수를 줄이세요.",
     threshold: 5,
     stacks: [
-      "YB", "R", "BY", "R", "YR",
-      "B", "YR", "B", "RY", "Y",
-      "RB", "Y", "BR", "Y", "RB",
-      "Y", "BR", "Y", "RB", "B",
-      "RY", "B", "YR", "B", "Y",
+      "YB", "Y", "R", "RB", "B",
+      "Y", "BR", "R", "B", "BY",
+      "R", "R", "YB", "Y", "B",
+      "RB", "B", "Y", "RY", "Y",
+      "B", "BR", "R", "Y", "YR",
     ],
-    nextIntel: "종합형 · 다층 결정 · 반격 5탭",
+    nextIntel: "종합형 · 최대 4층 결정 · 반격 5탭",
   },
   {
     name: "핵심 기억체",
     pattern: "종합 검증",
-    goal: "완성한 빌드로 다층 결정을 제거합니다.",
-    colors: ["red", "blue", "yellow"],
+    goal: "완성한 근접·궁수·연계 빌드로 핵심을 돌파하세요.",
     threshold: 5,
     stacks: [
-      "RYB", "BR", "YB", "RY", "BRY",
-      "BY", "YRB", "RB", "YR", "BYR",
-      "RB", "YB", "BRY", "YR", "RYB",
-      "YR", "BRY", "YB", "RB", "BY",
-      "BRY", "YR", "RB", "BYR", "RY",
+      "RYBR", "RY", "B", "BYR", "B",
+      "R", "RYB", "B", "YB", "Y",
+      "YR", "Y", "BRY", "R", "RY",
+      "B", "BRY", "B", "YR", "Y",
+      "BYR", "B", "R", "RYB", "R",
     ],
     nextIntel: "런 결과 분석",
   },
 ];
 
 const ABILITIES = {
-  red_chain: {
-    id: "red_chain",
-    color: "red",
-    name: "적색 연쇄",
-    description: "적색 공격 시 능력 레벨만큼 다른 색의 노출 결정도 제거합니다.",
+  spin_slash: {
+    id: "spin_slash",
+    role: "melee",
+    name: "회전 베기",
+    description: "Lv.1은 상하좌우, Lv.2는 대각선까지 주변 표면을 추가 파괴합니다.",
   },
-  blue_reroll: {
-    id: "blue_reroll",
-    color: "blue",
-    name: "청색 재배열",
-    description: "라운드마다 능력 레벨만큼 색 정령 후보를 재배열할 수 있습니다.",
+  piercing_arrow: {
+    id: "piercing_arrow",
+    role: "archer",
+    name: "관통 화살",
+    description: "궁수 공격의 관통 깊이가 기본 2층에서 레벨마다 1층 증가합니다.",
   },
-  yellow_guard: {
-    id: "yellow_guard",
-    color: "yellow",
-    name: "황색 보호",
-    description: "라운드마다 능력 레벨만큼 황색 공격의 반격 게이지를 막습니다.",
+  crossfire: {
+    id: "crossfire",
+    role: "duo",
+    name: "교차 사격",
+    description: "연계 공격에 필요한 교대 횟수가 기본 3회에서 레벨마다 1회 감소합니다.",
   },
 };
 
@@ -94,15 +99,15 @@ const state = {
   round: 0,
   shield: MAX_SHIELD,
   counter: 0,
+  link: 0,
+  lastActor: null,
   taps: 0,
   totalTaps: 0,
   board: [],
   initialLayers: 0,
   candidates: [],
   abilities: {},
-  colorUse: { red: 0, blue: 0, yellow: 0 },
-  rerollsLeft: 0,
-  yellowGuardsUsed: 0,
+  actorUse: { melee: 0, archer: 0, duo: 0 },
   locked: true,
 };
 
@@ -111,6 +116,7 @@ const refs = {
   roundLabel: document.querySelector("#roundLabel"),
   shieldDisplay: document.querySelector("#shieldDisplay"),
   counterDisplay: document.querySelector("#counterDisplay"),
+  linkDisplay: document.querySelector("#linkDisplay"),
   patternLabel: document.querySelector("#patternLabel"),
   enemyName: document.querySelector("#enemyName"),
   roundGoal: document.querySelector("#roundGoal"),
@@ -119,11 +125,9 @@ const refs = {
   clearProgress: document.querySelector("#clearProgress"),
   clearPercent: document.querySelector("#clearPercent"),
   abilityChips: document.querySelector("#abilityChips"),
-  spiritChoices: document.querySelector("#spiritChoices"),
+  actionChoices: document.querySelector("#actionChoices"),
   tapCount: document.querySelector("#tapCount"),
   feedbackText: document.querySelector("#feedbackText"),
-  rerollButton: document.querySelector("#rerollButton"),
-  rerollCount: document.querySelector("#rerollCount"),
   modalBackdrop: document.querySelector("#modalBackdrop"),
   modalPanel: document.querySelector("#modalPanel"),
   modalEyebrow: document.querySelector("#modalEyebrow"),
@@ -146,44 +150,156 @@ function topColor(stack) {
   return stack.length ? stack[0] : null;
 }
 
-function getDominantColor() {
-  return Object.entries(state.colorUse).sort((a, b) => b[1] - a[1])[0][0];
+function getCardinalNeighbors(index) {
+  const row = Math.floor(index / BOARD_SIZE);
+  const column = index % BOARD_SIZE;
+  const neighbors = [];
+  if (row > 0) neighbors.push(index - BOARD_SIZE);
+  if (row < BOARD_SIZE - 1) neighbors.push(index + BOARD_SIZE);
+  if (column > 0) neighbors.push(index - 1);
+  if (column < BOARD_SIZE - 1) neighbors.push(index + 1);
+  return neighbors;
 }
 
-function getNextPatternColor() {
-  const next = ROUND_DATA[Math.min(state.round + 1, ROUND_DATA.length - 1)];
-  const counts = { red: 0, blue: 0, yellow: 0 };
-  next.stacks.forEach((stackString) => {
-    normalizeStack(stackString).forEach((color) => {
-      counts[color] += 1;
+function getAllNeighbors(index) {
+  const row = Math.floor(index / BOARD_SIZE);
+  const column = index % BOARD_SIZE;
+  const neighbors = [];
+
+  for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
+    for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
+      if (rowOffset === 0 && columnOffset === 0) continue;
+      const nextRow = row + rowOffset;
+      const nextColumn = column + columnOffset;
+      if (
+        nextRow >= 0
+        && nextRow < BOARD_SIZE
+        && nextColumn >= 0
+        && nextColumn < BOARD_SIZE
+      ) {
+        neighbors.push((nextRow * BOARD_SIZE) + nextColumn);
+      }
+    }
+  }
+
+  return neighbors;
+}
+
+function getConnectedGroups() {
+  const visited = new Set();
+  const groups = [];
+
+  state.board.forEach((stack, startIndex) => {
+    const color = topColor(stack);
+    if (!color || visited.has(startIndex)) return;
+
+    const indexes = [];
+    const queue = [startIndex];
+    visited.add(startIndex);
+
+    while (queue.length) {
+      const index = queue.shift();
+      indexes.push(index);
+      getCardinalNeighbors(index).forEach((neighborIndex) => {
+        if (
+          !visited.has(neighborIndex)
+          && topColor(state.board[neighborIndex]) === color
+        ) {
+          visited.add(neighborIndex);
+          queue.push(neighborIndex);
+        }
+      });
+    }
+
+    groups.push({
+      id: `${color}-${Math.min(...indexes)}`,
+      color,
+      indexes,
     });
   });
-  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+
+  return groups;
 }
 
-function makeCandidate() {
-  const currentRound = ROUND_DATA[state.round];
-  const exposed = new Set(state.board.map(topColor).filter(Boolean));
-  const validColors = currentRound.colors.filter((color) => exposed.has(color));
-  const pool = validColors.length ? validColors : currentRound.colors;
-  return pool[Math.floor(Math.random() * pool.length)];
+function getPierceDepth() {
+  return BASE_PIERCE_DEPTH + (state.abilities.piercing_arrow || 0);
 }
 
-function ensureCandidateVariety() {
-  const exposed = [...new Set(state.board.map(topColor).filter(Boolean))];
-  if (!exposed.length) return;
+function getLinkThreshold() {
+  return Math.max(1, BASE_LINK_THRESHOLD - (state.abilities.crossfire || 0));
+}
 
-  const hasPlayable = state.candidates.some((color) => exposed.includes(color));
-  if (!hasPlayable) {
-    state.candidates[0] = exposed[0];
+function getGroupDepth(group) {
+  return Math.max(...group.indexes.map((index) => state.board[index].length));
+}
+
+function makeMeleeCandidate(group) {
+  return {
+    type: "melee",
+    color: group.color,
+    targetIndexes: [...group.indexes],
+    targetIndex: group.indexes[0],
+    value: group.indexes.length,
+  };
+}
+
+function makeArcherCandidate(index) {
+  const stack = state.board[index];
+  return {
+    type: "archer",
+    color: topColor(stack),
+    targetIndexes: [index],
+    targetIndex: index,
+    value: Math.min(stack.length, getPierceDepth()),
+  };
+}
+
+function makeDuoCandidate(group) {
+  const targetIndex = [...group.indexes]
+    .sort((left, right) => state.board[right].length - state.board[left].length)[0];
+  return {
+    type: "duo",
+    color: group.color,
+    targetIndexes: [...group.indexes],
+    targetIndex,
+    value: group.indexes.length + Math.min(2, Math.max(0, state.board[targetIndex].length - 1)),
+  };
+}
+
+function buildActionChoices() {
+  const groups = getConnectedGroups();
+  if (!groups.length) return [];
+
+  const meleePool = [...groups]
+    .sort((left, right) => {
+      const sizeDifference = right.indexes.length - left.indexes.length;
+      return sizeDifference || getGroupDepth(right) - getGroupDepth(left);
+    });
+
+  const archerPool = state.board
+    .map((stack, index) => ({ index, depth: stack.length }))
+    .filter(({ depth }) => depth > 0)
+    .sort((left, right) => right.depth - left.depth);
+
+  const choices = [
+    makeMeleeCandidate(meleePool[0]),
+    makeArcherCandidate(archerPool[0].index),
+  ];
+
+  if (state.link >= getLinkThreshold()) {
+    choices.push(makeDuoCandidate(meleePool[0]));
+  } else if (state.taps % 2 === 0 && meleePool[1]) {
+    choices.push(makeMeleeCandidate(meleePool[1]));
+  } else {
+    const alternateArcher = archerPool.find(({ index }) => index !== archerPool[0].index);
+    choices.push(
+      alternateArcher
+        ? makeArcherCandidate(alternateArcher.index)
+        : makeMeleeCandidate(meleePool[Math.min(1, meleePool.length - 1)]),
+    );
   }
-}
 
-function refillCandidates() {
-  while (state.candidates.length < 3) {
-    state.candidates.push(makeCandidate());
-  }
-  ensureCandidateVariety();
+  return choices;
 }
 
 function startRun() {
@@ -191,15 +307,15 @@ function startRun() {
     round: 0,
     shield: MAX_SHIELD,
     counter: 0,
+    link: 0,
+    lastActor: null,
     taps: 0,
     totalTaps: 0,
     board: [],
     initialLayers: 0,
     candidates: [],
     abilities: {},
-    colorUse: { red: 0, blue: 0, yellow: 0 },
-    rerollsLeft: 0,
-    yellowGuardsUsed: 0,
+    actorUse: { melee: 0, archer: 0, duo: 0 },
     locked: false,
   });
   closeModal();
@@ -210,21 +326,21 @@ function loadRound(roundIndex) {
   const data = ROUND_DATA[roundIndex];
   state.round = roundIndex;
   state.counter = 0;
+  state.link = 0;
+  state.lastActor = null;
   state.taps = 0;
   state.board = data.stacks.map(normalizeStack);
   state.initialLayers = countLayers();
-  state.candidates = [];
-  state.rerollsLeft = state.abilities.blue_reroll || 0;
-  state.yellowGuardsUsed = 0;
   state.locked = false;
-  refillCandidates();
-  refs.feedbackText.textContent = "색 정령을 탭하면 같은 색 결정이 공격됩니다.";
+  state.candidates = buildActionChoices();
+  refs.feedbackText.textContent = "번호가 표시된 공격 후보 하나를 탭하세요.";
   render();
 }
 
 function render() {
   renderHeader();
   renderCounter();
+  renderLink();
   renderBoard();
   renderAbilities();
   renderCandidates();
@@ -256,18 +372,54 @@ function renderCounter() {
   refs.counterDisplay.setAttribute("aria-label", `반격 게이지 ${state.counter} / ${threshold}`);
 }
 
+function renderLink() {
+  const threshold = getLinkThreshold();
+  refs.linkDisplay.innerHTML = "";
+  for (let index = 0; index < threshold; index += 1) {
+    const pip = document.createElement("i");
+    pip.classList.toggle("is-filled", index < state.link);
+    refs.linkDisplay.appendChild(pip);
+  }
+  refs.linkDisplay.classList.toggle("is-ready", state.link >= threshold);
+  refs.linkDisplay.setAttribute(
+    "aria-label",
+    state.link >= threshold ? "연계 공격 준비 완료" : `연계 게이지 ${state.link} / ${threshold}`,
+  );
+}
+
+function getCandidateSlotsForCell(cellIndex) {
+  return state.candidates
+    .map((candidate, candidateIndex) => (
+      candidate.targetIndexes.includes(cellIndex) ? candidateIndex + 1 : null
+    ))
+    .filter(Boolean);
+}
+
 function renderBoard() {
   refs.crystalGrid.innerHTML = "";
   state.board.forEach((stack, index) => {
     const cell = document.createElement("div");
     const color = topColor(stack);
-    cell.className = `crystal-cell${color ? "" : " is-empty"}`;
+    const candidateSlots = getCandidateSlotsForCell(index);
+    cell.className = `crystal-cell${color ? "" : " is-empty"}${candidateSlots.length ? " has-target" : ""}`;
     cell.dataset.cellIndex = String(index);
     if (color) cell.dataset.color = color;
+    if (candidateSlots.length) cell.dataset.targetSlots = candidateSlots.join(" ");
     cell.setAttribute("role", "gridcell");
-    cell.setAttribute("aria-label", color ? `${COLOR_META[color].name} 결정, ${stack.length}층` : "제거된 결정");
+    cell.setAttribute(
+      "aria-label",
+      color
+        ? `${COLOR_META[color].name} 결정, ${stack.length}층, 행동 후보 ${candidateSlots.join(", ")}의 대상`
+        : "제거된 결정",
+    );
     cell.innerHTML = color
-      ? `<span class="symbol">${COLOR_META[color].symbol}</span>${stack.length > 1 ? `<i class="depth">${stack.length}F</i>` : ""}`
+      ? `
+        <span class="symbol">${COLOR_META[color].symbol}</span>
+        ${stack.length > 1 ? `<i class="depth">${stack.length}F</i>` : ""}
+        <span class="target-markers">
+          ${candidateSlots.map((slot) => `<i data-slot="${slot}">${slot}</i>`).join("")}
+        </span>
+      `
       : "";
     refs.crystalGrid.appendChild(cell);
   });
@@ -292,86 +444,156 @@ function renderAbilities() {
     const ability = ABILITIES[abilityId];
     const chip = document.createElement("span");
     chip.className = "ability-chip";
-    chip.dataset.color = ability.color;
-    chip.textContent = `${COLOR_META[ability.color].symbol} ${ability.name} Lv.${level}`;
+    chip.dataset.role = ability.role;
+    chip.textContent = `${ACTOR_META[ability.role].symbol} ${ability.name} Lv.${level}`;
     refs.abilityChips.appendChild(chip);
   });
 }
 
-function renderCandidates() {
-  refs.spiritChoices.innerHTML = "";
-  state.candidates.forEach((color, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "spirit-button";
-    button.dataset.color = color;
-    button.setAttribute("aria-label", `${COLOR_META[color].name} 색 정령 선택`);
-    button.disabled = state.locked;
-    button.innerHTML = `
-      <span class="spirit-symbol">${COLOR_META[color].symbol}</span>
-      <small>${COLOR_META[color].name} 정령</small>
-    `;
-    button.addEventListener("click", () => attackWithCandidate(index));
-    refs.spiritChoices.appendChild(button);
-  });
-
-  const hasReroll = state.rerollsLeft > 0;
-  refs.rerollButton.hidden = !hasReroll;
-  refs.rerollCount.textContent = hasReroll ? `×${state.rerollsLeft}` : "";
+function getCandidateDescription(candidate) {
+  if (candidate.type === "melee") {
+    return `${COLOR_META[candidate.color].name} 연결 ${candidate.targetIndexes.length}칸`;
+  }
+  if (candidate.type === "archer") {
+    return `${COLOR_META[candidate.color].name} ${candidate.value}층 관통`;
+  }
+  return `${COLOR_META[candidate.color].name} 표면 + 중심 관통`;
 }
 
-function removeExtraVisibleCell(excludedColor) {
-  const candidateIndexes = state.board
-    .map((stack, index) => ({ stack, index }))
-    .filter(({ stack }) => stack.length && topColor(stack) !== excludedColor)
-    .map(({ index }) => index);
+function renderCandidates() {
+  refs.actionChoices.innerHTML = "";
+  state.candidates.forEach((candidate, index) => {
+    const actor = ACTOR_META[candidate.type];
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "action-button";
+    button.dataset.role = candidate.type;
+    button.dataset.color = candidate.color;
+    button.setAttribute(
+      "aria-label",
+      `${index + 1}번 ${actor.name} ${actor.action}, ${getCandidateDescription(candidate)}`,
+    );
+    button.disabled = state.locked;
+    button.innerHTML = `
+      <span class="candidate-number">${index + 1}</span>
+      <span class="action-symbol">${actor.symbol}</span>
+      <strong>${actor.name} · ${actor.action}</strong>
+      <small>${COLOR_META[candidate.color].symbol} ${getCandidateDescription(candidate)}</small>
+    `;
+    button.addEventListener("click", () => attackWithCandidate(index));
+    button.addEventListener("mouseenter", () => setCandidateFocus(index + 1));
+    button.addEventListener("mouseleave", () => setCandidateFocus(null));
+    button.addEventListener("focus", () => setCandidateFocus(index + 1));
+    button.addEventListener("blur", () => setCandidateFocus(null));
+    refs.actionChoices.appendChild(button);
+  });
+}
 
-  if (!candidateIndexes.length) return 0;
-  const index = candidateIndexes[Math.floor(Math.random() * candidateIndexes.length)];
-  state.board[index].shift();
-  return 1;
+function setCandidateFocus(slot) {
+  document.querySelectorAll(".crystal-cell").forEach((cell) => {
+    const slots = (cell.dataset.targetSlots || "").split(" ");
+    cell.classList.toggle("is-focused-target", Boolean(slot) && slots.includes(String(slot)));
+  });
+}
+
+function removeLayer(index, amount = 1) {
+  let removed = 0;
+  while (removed < amount && state.board[index].length) {
+    state.board[index].shift();
+    removed += 1;
+  }
+  return removed;
+}
+
+function performMeleeAttack(candidate) {
+  const targetSet = new Set(candidate.targetIndexes);
+  const sweepLevel = state.abilities.spin_slash || 0;
+  const splashIndexes = new Set();
+
+  if (sweepLevel > 0) {
+    candidate.targetIndexes.forEach((index) => {
+      const neighbors = sweepLevel >= 2 ? getAllNeighbors(index) : getCardinalNeighbors(index);
+      neighbors.forEach((neighborIndex) => {
+        if (!targetSet.has(neighborIndex) && state.board[neighborIndex].length) {
+          splashIndexes.add(neighborIndex);
+        }
+      });
+    });
+  }
+
+  let removed = 0;
+  candidate.targetIndexes.forEach((index) => {
+    removed += removeLayer(index);
+  });
+  splashIndexes.forEach((index) => {
+    removed += removeLayer(index);
+  });
+  return { removed, splash: splashIndexes.size };
+}
+
+function performArcherAttack(candidate) {
+  const depth = getPierceDepth();
+  return {
+    removed: removeLayer(candidate.targetIndex, depth),
+    depth,
+  };
+}
+
+function performDuoAttack(candidate) {
+  let removed = 0;
+  candidate.targetIndexes.forEach((index) => {
+    removed += removeLayer(index);
+  });
+  const pierced = removeLayer(candidate.targetIndex, BASE_PIERCE_DEPTH);
+  removed += pierced;
+  return { removed, pierced };
+}
+
+function updateLink(type) {
+  if (type === "duo") {
+    state.link = 0;
+    state.lastActor = null;
+    return;
+  }
+
+  if (state.lastActor && state.lastActor !== type) {
+    state.link = Math.min(getLinkThreshold(), state.link + 1);
+  }
+  state.lastActor = type;
 }
 
 function attackWithCandidate(candidateIndex) {
   if (state.locked) return;
-  const color = state.candidates[candidateIndex];
-  const targetIndexes = state.board
-    .map((stack, index) => ({ stack, index }))
-    .filter(({ stack }) => topColor(stack) === color)
-    .map(({ index }) => index);
-
-  if (!targetIndexes.length) {
-    refs.feedbackText.textContent = `${COLOR_META[color].name} 결정이 표면에 없습니다. 정령은 소모되지 않았습니다.`;
-    pulseInvalid(color);
-    return;
-  }
+  const candidate = state.candidates[candidateIndex];
+  if (!candidate) return;
 
   state.locked = true;
-  targetIndexes.forEach((index) => state.board[index].shift());
-  let extra = 0;
+  let result;
 
-  const redLevel = state.abilities.red_chain || 0;
-  if (color === "red" && redLevel > 0) {
-    for (let count = 0; count < redLevel; count += 1) {
-      extra += removeExtraVisibleCell("red");
-    }
+  if (candidate.type === "melee") {
+    result = performMeleeAttack(candidate);
+  } else if (candidate.type === "archer") {
+    result = performArcherAttack(candidate);
+  } else {
+    result = performDuoAttack(candidate);
   }
-
-  const guardLevel = state.abilities.yellow_guard || 0;
-  const guardTriggered = color === "yellow"
-    && guardLevel > 0
-    && state.yellowGuardsUsed < guardLevel;
-  if (guardTriggered) state.yellowGuardsUsed += 1;
 
   state.taps += 1;
   state.totalTaps += 1;
-  state.colorUse[color] += 1;
-  if (!guardTriggered) state.counter += 1;
+  state.counter += 1;
+  state.actorUse[candidate.type] += 1;
+  updateLink(candidate.type);
 
-  const removedCount = targetIndexes.length + extra;
-  refs.feedbackText.textContent = `${COLOR_META[color].name} 공격으로 결정 ${removedCount}개 제거${guardTriggered ? " · 반격 게이지 방어" : ""}`;
-  state.candidates.splice(candidateIndex, 1);
-  refillCandidates();
+  const actor = ACTOR_META[candidate.type];
+  const detail = candidate.type === "melee" && result.splash
+    ? ` · 주변 ${result.splash}칸 추가 타격`
+    : candidate.type === "archer"
+      ? ` · 최대 ${result.depth}층 관통`
+      : candidate.type === "duo"
+        ? ` · 중심 ${result.pierced}층 추가 관통`
+        : "";
+  const linkReady = state.link >= getLinkThreshold();
+  refs.feedbackText.textContent = `${actor.name} ${actor.action}로 결정 ${result.removed}개 제거${detail}${linkReady ? " · 연계 공격 준비 완료" : ""}`;
   flashDamage();
 
   const threshold = ROUND_DATA[state.round].threshold;
@@ -385,6 +607,7 @@ function attackWithCandidate(candidateIndex) {
     refs.feedbackText.textContent += " · 마무리 공격으로 반격 무효";
   }
 
+  state.candidates = boardCleared ? [] : buildActionChoices();
   render();
 
   if (state.shield <= 0) {
@@ -401,17 +624,6 @@ function attackWithCandidate(candidateIndex) {
     state.locked = false;
     renderCandidates();
   }, 220);
-}
-
-function pulseInvalid(color) {
-  document.querySelectorAll(".crystal-cell").forEach((cell) => {
-    if (cell.dataset.color === color) {
-      cell.animate(
-        [{ filter: "brightness(1)" }, { filter: "brightness(1.8)" }, { filter: "brightness(1)" }],
-        { duration: 360 },
-      );
-    }
-  });
 }
 
 function flashDamage() {
@@ -432,20 +644,19 @@ function handleRoundClear() {
 }
 
 function showIntroModal() {
-  refs.modalEyebrow.textContent = "4 ROUND PLAYTEST";
-  refs.modalTitle.textContent = "결정을 지우는 것이 곧 공격입니다";
+  refs.modalEyebrow.textContent = "4 ROUND DUO PLAYTEST";
+  refs.modalTitle.textContent = "넓게 베고, 깊게 꿰뚫으세요";
   refs.modalBody.innerHTML = `
-    <p>하단의 색 정령을 탭하면 표면에 노출된 같은 색 결정이 한 번에 제거됩니다.</p>
+    <p>번호가 표시된 행동 후보 하나를 탭하면 두 캐릭터가 즉시 공격합니다.</p>
     <ul>
-      <li>결정을 모두 제거하면 라운드 클리어</li>
-      <li>탭할 때마다 반격 게이지 증가</li>
-      <li>R1·R3 종료 후 능력 3개 중 하나 선택</li>
-      <li>R4에서 완성한 빌드 검증</li>
+      <li><strong>근접</strong>: 연결된 같은 색 덩어리의 표면을 한 번에 제거</li>
+      <li><strong>궁수</strong>: 선택된 결정 하나를 기본 2층 관통</li>
+      <li><strong>연계</strong>: 근접과 궁수를 교대해 게이지를 채우면 등장</li>
+      <li>반격 전에 모든 결정을 제거하면 라운드 클리어</li>
     </ul>
   `;
   refs.modalActions.innerHTML = "";
-  const startButton = makePrimaryButton("4라운드 시작", startRun);
-  refs.modalActions.appendChild(startButton);
+  refs.modalActions.appendChild(makePrimaryButton("4라운드 시작", startRun));
   openModal();
 }
 
@@ -454,14 +665,15 @@ function showHelpModal() {
   state.locked = true;
   renderCandidates();
   refs.modalEyebrow.textContent = "HOW TO PLAY";
-  refs.modalTitle.textContent = "한 번의 선택, 즉시 공격";
+  refs.modalTitle.textContent = "세 후보 중 하나를 탭하세요";
   refs.modalBody.innerHTML = `
-    <p><strong>◆ 적색 · ● 청색 · ▲ 황색</strong> 기호와 색을 함께 확인하세요.</p>
+    <p>판의 <strong>1·2·3 번호</strong>와 하단 행동 후보의 번호가 공격 위치를 표시합니다.</p>
     <ul>
-      <li>색 정령을 탭하면 같은 색의 노출 결정이 제거됩니다.</li>
-      <li>결정 우측 하단의 숫자는 남은 층 수입니다.</li>
+      <li>근접은 상하좌우로 연결된 같은 색 표면을 공격합니다.</li>
+      <li>궁수는 표시된 한 칸을 깊게 관통합니다.</li>
+      <li>근접과 궁수를 번갈아 쓰면 연계 게이지가 증가합니다.</li>
+      <li>연계 준비가 끝나면 세 번째 후보에 합동 공격이 등장합니다.</li>
       <li>반격 게이지가 가득 차면 보호막이 1칸 감소합니다.</li>
-      <li>능력 선택에서는 강화·대응·전환 중 하나를 고릅니다.</li>
     </ul>
   `;
   refs.modalActions.innerHTML = "";
@@ -474,37 +686,30 @@ function showHelpModal() {
 }
 
 function showAbilityModal() {
-  const dominant = getDominantColor();
-  const nextColor = getNextPatternColor();
   refs.modalEyebrow.textContent = `ROUND ${state.round + 1} CLEAR · ABILITY PICK`;
-  refs.modalTitle.textContent = "능력 하나를 선택하세요";
+  refs.modalTitle.textContent = "전투 능력 하나를 선택하세요";
   refs.modalBody.innerHTML = `
     <div class="intel-card">
       <strong>다음 라운드 예고</strong>
       ${ROUND_DATA[state.round].nextIntel}
     </div>
-    <p>현재 빌드 강화, 다음 상황 대응, 다른 색 계열 전환의 세 선택지를 제공합니다.</p>
+    <p>근접의 범위, 궁수의 깊이, 두 캐릭터의 연계 중 하나를 강화합니다.</p>
   `;
   refs.modalActions.innerHTML = "";
 
   Object.values(ABILITIES).forEach((ability) => {
-    const role = ability.color === dominant
-      ? "현재 강화"
-      : ability.color === nextColor
-        ? "다음 대응"
-        : "빌드 전환";
     const level = state.abilities[ability.id] || 0;
     const button = document.createElement("button");
     button.type = "button";
     button.className = "ability-option";
-    button.dataset.color = ability.color;
+    button.dataset.role = ability.role;
     button.innerHTML = `
-      <span class="option-symbol">${COLOR_META[ability.color].symbol}</span>
+      <span class="option-symbol">${ACTOR_META[ability.role].symbol}</span>
       <span>
-        <strong>${ability.name}${level ? ` Lv.${level} → Lv.${Math.min(level + 1, 2)}` : ""}</strong>
+        <strong>${ability.name}${level ? ` Lv.${level} → Lv.${Math.min(level + 1, 2)}` : " Lv.1"}</strong>
         <small>${ability.description}</small>
       </span>
-      <span class="option-role">${role}</span>
+      <span class="option-role">${ACTOR_META[ability.role].name} 강화</span>
     `;
     button.addEventListener("click", () => chooseAbility(ability.id));
     refs.modalActions.appendChild(button);
@@ -537,26 +742,32 @@ function showRoundClearModal() {
 }
 
 function calculateGrade() {
-  if (state.shield === MAX_SHIELD && state.totalTaps <= 20) return "S";
-  if (state.shield >= 2 && state.totalTaps <= 25) return "A";
+  if (state.shield === MAX_SHIELD && state.totalTaps <= 24) return "S";
+  if (state.shield >= 2 && state.totalTaps <= 30) return "A";
   if (state.shield >= 1) return "B";
   return "C";
 }
 
+function getDominantTactic() {
+  return Object.entries(state.actorUse)
+    .filter(([type]) => type !== "duo")
+    .sort((left, right) => right[1] - left[1])[0][0];
+}
+
 function showResultModal() {
   const grade = calculateGrade();
-  const dominant = getDominantColor();
+  const dominantTactic = getDominantTactic();
   refs.modalEyebrow.textContent = "BLOCK A COMPLETE";
   refs.modalTitle.textContent = "기억 복원이 완료되었습니다";
   refs.modalBody.innerHTML = `
     <div class="result-card">
       <strong>복원 등급</strong>
       <div class="result-grade">${grade}</div>
-      <p>주력 계열: ${COLOR_META[dominant].symbol} ${COLOR_META[dominant].name}</p>
+      <p>주력 전술: ${ACTOR_META[dominantTactic].symbol} ${ACTOR_META[dominantTactic].name}</p>
       <p>총 탭 수: ${state.totalTaps} · 잔여 보호막: ${state.shield}</p>
-      <p>획득 능력: ${Object.keys(state.abilities).length || 0}종</p>
+      <p>근접 ${state.actorUse.melee}회 · 궁수 ${state.actorUse.archer}회 · 연계 ${state.actorUse.duo}회</p>
     </div>
-    <p>실제 포트폴리오에서는 이 결과를 탭 수·피격·능력 선택률 테스트 데이터와 연결합니다.</p>
+    <p>다른 능력과 공격 순서를 선택해 행동 수와 피격 횟수를 비교할 수 있습니다.</p>
   `;
   refs.modalActions.innerHTML = "";
   refs.modalActions.appendChild(makePrimaryButton("다른 빌드로 다시 시작", startRun));
@@ -571,7 +782,7 @@ function showFailModal() {
       <strong>도달 기록</strong>
       <p>ROUND ${state.round + 1} · 총 탭 ${state.totalTaps}회</p>
     </div>
-    <p>색 제거 순서와 능력 선택을 바꿔 반격 횟수를 줄여보세요.</p>
+    <p>넓은 덩어리는 근접으로, 두꺼운 결정은 궁수로 처리하고 교대 공격을 이어가 보세요.</p>
   `;
   refs.modalActions.innerHTML = "";
   refs.modalActions.appendChild(makePrimaryButton("블록 다시 시작", startRun));
@@ -595,15 +806,6 @@ function openModal() {
 function closeModal() {
   refs.modalBackdrop.classList.remove("is-open");
 }
-
-refs.rerollButton.addEventListener("click", () => {
-  if (state.locked || state.rerollsLeft <= 0) return;
-  state.rerollsLeft -= 1;
-  state.candidates = [];
-  refillCandidates();
-  refs.feedbackText.textContent = "청색 재배열로 색 정령 후보를 교체했습니다.";
-  renderCandidates();
-});
 
 refs.helpButton.addEventListener("click", showHelpModal);
 
