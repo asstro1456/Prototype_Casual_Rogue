@@ -1,3 +1,4 @@
+// Archived realtime-defense prototype.
 const APP_VERSION = "0.4.0";
 const APP_VERSION_NAME = "REALTIME DEFENSE";
 

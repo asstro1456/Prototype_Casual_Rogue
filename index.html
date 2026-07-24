@@ -3,106 +3,58 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b1020">
-  <title>프리즘 리콜 — 실시간 디펜스 프로토타입</title>
-  <link rel="stylesheet" href="./styles.css?v=0.4.0">
+  <meta name="theme-color" content="#111b34">
+  <title>프리즘 리콜 — 프로토타입 허브</title>
+  <link rel="stylesheet" href="./hub.css?v=1">
 </head>
 <body>
-  <main class="app-shell">
-    <section class="game-card" aria-label="프리즘 리콜 게임 화면">
-      <header class="topbar">
-        <div class="title-lockup">
-          <p class="eyebrow">PRISM RECALL // REALTIME DEFENSE PROTOTYPE</p>
-          <h1>프리즘 리콜</h1>
-          <span class="header-version" data-app-version>v0.4.0 · REALTIME DEFENSE</span>
-        </div>
-        <button id="helpButton" class="icon-button" type="button" aria-label="게임 방법 보기">?</button>
-      </header>
+  <main class="hub">
+    <header class="hero">
+      <p class="eyebrow">PRISM RECALL // PROTOTYPE ARCHIVE</p>
+      <h1>탑을 오르는<br><em>세 가지 실험</em></h1>
+      <p class="intro">각 프로토타입은 서로 독립되어 있습니다. 이전 전투 방식을 비교하거나, 최신 룬 트레이스를 바로 시작할 수 있습니다.</p>
+    </header>
 
-      <section class="run-status" aria-label="런 진행 상태">
-        <div class="round-copy">
-          <span id="blockLabel">BLOCK A</span>
-          <strong id="roundLabel">ROUND 1 / 4</strong>
+    <section class="prototype-list" aria-label="프로토타입 목록">
+      <a class="prototype-card is-current" href="./rune-trace/index.html">
+        <span class="card-number">03</span>
+        <div class="card-art rune-art" aria-hidden="true">
+          <i></i><i></i><i></i><i></i>
         </div>
-        <div class="round-track" aria-hidden="true">
-          <i data-round-dot="1"></i>
-          <i data-round-dot="2"></i>
-          <i data-round-dot="3"></i>
-          <i data-round-dot="4"></i>
+        <div class="card-copy">
+          <span class="status">CURRENT · v0.0.1</span>
+          <h2>룬 트레이스</h2>
+          <p>네 개의 경로를 정확히 그려 층을 돌파합니다. 룬이 적을 베고, 살아남은 적은 발판을 오염시킵니다.</p>
+          <strong>플레이하기 <b>→</b></strong>
         </div>
-      </section>
+      </a>
 
-      <section class="combat-hud">
-        <div class="hud-item">
-          <span>보호막</span>
-          <strong id="shieldDisplay" aria-label="남은 보호막"></strong>
+      <a class="prototype-card" href="./archive/clear-all-v0.1.0/index.html">
+        <span class="card-number">01</span>
+        <div class="card-art clear-art" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i><i></i>
         </div>
-        <div class="hud-item">
-          <span>남은 적</span>
-          <strong id="enemyCountDisplay" aria-label="남은 적 수">0</strong>
+        <div class="card-copy">
+          <span class="status archived">ARCHIVE · v0.1.0</span>
+          <h2>전체 제거 퍼즐</h2>
+          <p>전사와 궁수를 교대해 결정 외피를 전부 제거하던 최초 전투형 프로토타입입니다.</p>
+          <strong>보관판 열기 <b>→</b></strong>
         </div>
-      </section>
+      </a>
 
-      <section class="enemy-zone">
-        <div class="enemy-meta">
-          <div>
-            <span id="patternLabel" class="pattern-badge">온보딩형</span>
-            <h2 id="enemyName">기억체 01</h2>
-          </div>
-          <p id="roundGoal">자동 전투 중 색 공격의 타이밍을 선택하세요.</p>
+      <a class="prototype-card" href="./archive/realtime-defense-v0.4.0/index.html">
+        <span class="card-number">02</span>
+        <div class="card-art defense-art" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i>
         </div>
-
-        <div class="portrait-stage">
-          <div class="party-portrait" aria-hidden="true">
-            <div class="portrait-halo"></div>
-            <div class="memory-tower"></div>
-            <div class="fighter melee-fighter">
-              <i class="fighter-head"></i>
-              <i class="fighter-body"></i>
-              <i class="fighter-weapon"></i>
-              <b>VANGUARD</b>
-            </div>
-            <div class="fighter archer-fighter">
-              <i class="fighter-head"></i>
-              <i class="fighter-body"></i>
-              <i class="fighter-weapon"></i>
-              <b>ARCHER</b>
-            </div>
-          </div>
-          <div id="crystalGrid" class="crystal-grid" role="grid" aria-label="5열 전투선"></div>
-          <div id="damageFlash" class="damage-flash" aria-hidden="true"></div>
+        <div class="card-copy">
+          <span class="status archived">ARCHIVE · v0.4.0</span>
+          <h2>실시간 디펜스</h2>
+          <p>자동 전투와 색 전체 공격을 결합했던 실시간 전투형 프로토타입입니다.</p>
+          <strong>보관판 열기 <b>→</b></strong>
         </div>
-
-        <div class="progress-row">
-          <span>웨이브 격퇴</span>
-          <div class="progress-bar"><i id="clearProgress"></i></div>
-          <strong id="clearPercent">0%</strong>
-        </div>
-      </section>
-
-      <section class="action-zone">
-        <div class="section-heading">
-          <span>색 전체 공격</span>
-          <small id="tapCount">공용 쿨타임 준비</small>
-        </div>
-        <div id="actionChoices" class="action-choices color-actions" aria-label="적색, 청색, 황색 전체 공격"></div>
-        <div class="action-footer">
-          <p id="feedbackText" role="status">번호가 표시된 공격 후보 하나를 탭하세요.</p>
-        </div>
-      </section>
+      </a>
     </section>
   </main>
-
-  <div id="modalBackdrop" class="modal-backdrop is-open">
-    <section id="modalPanel" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
-      <span class="modal-version" data-app-version>v0.4.0 · REALTIME DEFENSE</span>
-      <p id="modalEyebrow" class="eyebrow">4 ROUND PLAYTEST</p>
-      <h2 id="modalTitle">넓게 베고, 깊게 꿰뚫으세요</h2>
-      <div id="modalBody" class="modal-body"></div>
-      <div id="modalActions" class="modal-actions"></div>
-    </section>
-  </div>
-
-  <script src="./app.js?v=0.4.0"></script>
 </body>
 </html>
