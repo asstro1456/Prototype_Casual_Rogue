@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <title>프리즘 리콜 — 4라운드 프로토타입</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="game-card" aria-label="프리즘 리콜 게임 화면">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">PRISM RECALL // DUMMY PROTOTYPE</p>
+          <h1>프리즘 리콜</h1>
+        </div>
+        <button id="helpButton" class="icon-button" type="button" aria-label="게임 방법 보기">?</button>
+      </header>
+
+      <section class="run-status" aria-label="런 진행 상태">
+        <div class="round-copy">
+          <span id="blockLabel">BLOCK A</span>
+          <strong id="roundLabel">ROUND 1 / 4</strong>
+        </div>
+        <div class="round-track" aria-hidden="true">
+          <i data-round-dot="1"></i>
+          <i data-round-dot="2"></i>
+          <i data-round-dot="3"></i>
+          <i data-round-dot="4"></i>
+        </div>
+      </section>
+
+      <section class="combat-hud">
+        <div class="hud-item">
+          <span>보호막</span>
+          <strong id="shieldDisplay" aria-label="남은 보호막"></strong>
+        </div>
+        <div class="hud-item counter-item">
+          <span>반격 게이지</span>
+          <div id="counterDisplay" class="counter-pips" aria-label="반격 게이지"></div>
+        </div>
+      </section>
+
+      <section class="enemy-zone">
+        <div class="enemy-meta">
+          <div>
+            <span id="patternLabel" class="pattern-badge">온보딩형</span>
+            <h2 id="enemyName">기억체 01</h2>
+          </div>
+          <p id="roundGoal">같은 색의 결정 표면을 제거하세요.</p>
+        </div>
+
+        <div class="portrait-stage">
+          <div class="dummy-portrait" aria-hidden="true">
+            <div class="portrait-halo"></div>
+            <div class="portrait-head"></div>
+            <div class="portrait-body"></div>
+            <span>MEMORY SUBJECT</span>
+          </div>
+          <div id="crystalGrid" class="crystal-grid" role="grid" aria-label="적의 결정 외피"></div>
+          <div id="damageFlash" class="damage-flash" aria-hidden="true"></div>
+        </div>
+
+        <div class="progress-row">
+          <span>외피 제거</span>
+          <div class="progress-bar"><i id="clearProgress"></i></div>
+          <strong id="clearPercent">0%</strong>
+        </div>
+      </section>
+
+      <section class="ability-strip" aria-label="보유 능력">
+        <div class="section-heading">
+          <span>런 능력</span>
+          <small>현재 블록에서만 유지</small>
+        </div>
+        <div id="abilityChips" class="ability-chips">
+          <span class="empty-chip">아직 획득한 능력이 없습니다.</span>
+        </div>
+      </section>
+
+      <section class="action-zone">
+        <div class="section-heading">
+          <span>색 정령 선택</span>
+          <small id="tapCount">탭 0회</small>
+        </div>
+        <div id="spiritChoices" class="spirit-choices" aria-label="색 정령 후보"></div>
+        <div class="action-footer">
+          <button id="rerollButton" class="secondary-button" type="button" hidden>
+            후보 재배열 <span id="rerollCount"></span>
+          </button>
+          <p id="feedbackText" role="status">색 정령을 탭하면 같은 색 결정이 공격됩니다.</p>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div id="modalBackdrop" class="modal-backdrop is-open">
+    <section id="modalPanel" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <p id="modalEyebrow" class="eyebrow">4 ROUND PLAYTEST</p>
+      <h2 id="modalTitle">결정을 지우는 것이 곧 공격입니다</h2>
+      <div id="modalBody" class="modal-body"></div>
+      <div id="modalActions" class="modal-actions"></div>
+    </section>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
