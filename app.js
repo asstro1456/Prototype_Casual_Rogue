@@ -1,124 +1,142 @@
-const APP_VERSION = "0.1.0";
-const APP_VERSION_NAME = "DUO COMBAT";
+const APP_VERSION = "0.2.0";
+const APP_VERSION_NAME = "DESCENT WAVE";
 
-const COLOR_META = {
-  red: { name: "적색", symbol: "◆" },
-  blue: { name: "청색", symbol: "●" },
-  yellow: { name: "황색", symbol: "▲" },
+const ENEMY_META = {
+  red: {
+    name: "속공형",
+    symbol: "◆",
+    hp: 1,
+    speed: 2,
+    breachDamage: 1,
+    tag: "FAST",
+  },
+  blue: {
+    name: "중장형",
+    symbol: "●",
+    hp: 2,
+    speed: 1,
+    breachDamage: 1,
+    tag: "ARMOR",
+  },
+  yellow: {
+    name: "위험형",
+    symbol: "▲",
+    hp: 1,
+    speed: 1,
+    breachDamage: 2,
+    tag: "DANGER",
+  },
 };
 
 const ACTOR_META = {
-  melee: { name: "근접", action: "베기", symbol: "⚔" },
-  archer: { name: "궁수", action: "관통", symbol: "➶" },
+  melee: { name: "전사", action: "전열 베기", symbol: "⚔" },
+  archer: { name: "궁수", action: "정밀 사격", symbol: "➶" },
   duo: { name: "연계", action: "교차 공격", symbol: "✦" },
 };
 
 const MAX_SHIELD = 3;
 const BOARD_SIZE = 5;
-const BASE_LINK_THRESHOLD = 3;
-const BASE_PIERCE_DEPTH = 2;
+const LINK_THRESHOLD = 2;
 
 const ROUND_DATA = [
   {
-    name: "기억체 01",
-    pattern: "교대 훈련",
-    goal: "넓은 덩어리는 베고, 두꺼운 결정은 관통하세요.",
-    threshold: 6,
-    stacks: [
-      "R", "R", "RB", "B", "B",
-      "R", "RR", "RB", "B", "BB",
-      "R", "R", "B", "B", "B",
-      "B", "BR", "B", "R", "R",
-      "B", "B", "BR", "R", "RR",
+    name: "빙결 해안 01",
+    pattern: "진격 훈련",
+    goal: "전열은 베고, 먼 적은 궁수로 저격하세요.",
+    nextIntel: "중장형 추가 · 방어 2",
+    wave: [
+      [{ column: 1, type: "red" }, { column: 3, type: "blue" }],
+      [{ column: 0, type: "red" }, { column: 2, type: "red" }, { column: 4, type: "blue" }],
+      [{ column: 1, type: "blue" }, { column: 2, type: "red" }],
+      [{ column: 0, type: "red" }, { column: 3, type: "blue" }],
     ],
-    nextIntel: "혼합형 · 3색 등장 · 반격 6탭",
   },
   {
-    name: "기억체 02",
-    pattern: "삼색 혼합",
-    goal: "공격 위치와 다음에 드러날 색을 함께 판단하세요.",
-    threshold: 6,
-    stacks: [
-      "RY", "R", "B", "BY", "B",
-      "R", "RY", "B", "B", "YB",
-      "Y", "YB", "BR", "R", "YR",
-      "Y", "B", "BR", "R", "R",
-      "BY", "B", "Y", "Y", "RY",
+    name: "빙결 해안 02",
+    pattern: "장갑 혼합",
+    goal: "중장형은 궁수로 먼저 관통하세요.",
+    nextIntel: "속공·위험형 혼합",
+    wave: [
+      [{ column: 0, type: "blue" }, { column: 3, type: "red" }],
+      [{ column: 1, type: "red" }, { column: 2, type: "blue" }, { column: 4, type: "red" }],
+      [{ column: 0, type: "red" }, { column: 2, type: "yellow" }],
+      [{ column: 1, type: "blue" }, { column: 3, type: "blue" }],
+      [{ column: 0, type: "yellow" }, { column: 4, type: "red" }],
     ],
-    nextIntel: "분산형 · 작은 덩어리 증가 · 반격 5탭",
   },
   {
-    name: "기억체 03",
-    pattern: "분산 압박",
-    goal: "교대 공격으로 연계를 준비해 행동 수를 줄이세요.",
-    threshold: 5,
-    stacks: [
-      "YB", "Y", "R", "RB", "B",
-      "Y", "BR", "R", "B", "BY",
-      "R", "R", "YB", "Y", "B",
-      "RB", "B", "Y", "RY", "Y",
-      "B", "BR", "R", "Y", "YR",
+    name: "빙결 해안 03",
+    pattern: "속공 압박",
+    goal: "빠른 적과 돌파 피해가 큰 적을 우선하세요.",
+    nextIntel: "세 유형 종합 웨이브",
+    wave: [
+      [{ column: 1, type: "red" }, { column: 4, type: "yellow" }],
+      [{ column: 0, type: "blue" }, { column: 2, type: "red" }, { column: 3, type: "red" }],
+      [{ column: 1, type: "yellow" }, { column: 4, type: "blue" }],
+      [{ column: 0, type: "red" }, { column: 2, type: "blue" }, { column: 4, type: "red" }],
+      [{ column: 1, type: "blue" }, { column: 3, type: "yellow" }],
     ],
-    nextIntel: "종합형 · 최대 4층 결정 · 반격 5탭",
   },
   {
     name: "핵심 기억체",
-    pattern: "종합 검증",
-    goal: "완성한 근접·궁수·연계 빌드로 핵심을 돌파하세요.",
-    threshold: 5,
-    stacks: [
-      "RYBR", "RY", "B", "BYR", "B",
-      "R", "RYB", "B", "YB", "Y",
-      "YR", "Y", "BRY", "R", "RY",
-      "B", "BRY", "B", "YR", "Y",
-      "BYR", "B", "R", "RYB", "R",
-    ],
+    pattern: "종합 웨이브",
+    goal: "전사·궁수·연계를 모두 활용해 진격을 막으세요.",
     nextIntel: "런 결과 분석",
+    wave: [
+      [{ column: 0, type: "red" }, { column: 2, type: "blue" }, { column: 4, type: "yellow" }],
+      [{ column: 1, type: "blue" }, { column: 3, type: "red" }],
+      [{ column: 0, type: "yellow" }, { column: 2, type: "red" }, { column: 4, type: "blue" }],
+      [{ column: 1, type: "red" }, { column: 2, type: "blue" }, { column: 3, type: "red" }],
+      [{ column: 0, type: "blue" }, { column: 4, type: "yellow" }],
+      [{ column: 1, type: "yellow" }, { column: 3, type: "blue" }],
+    ],
   },
 ];
 
 const ABILITIES = {
-  spin_slash: {
-    id: "spin_slash",
+  heavy_slash: {
+    id: "heavy_slash",
     role: "melee",
-    name: "회전 베기",
-    description: "Lv.1은 상하좌우, Lv.2는 대각선까지 주변 표면을 추가 파괴합니다.",
+    name: "강철 베기",
+    description: "전사의 전열 베기 피해가 레벨마다 1 증가합니다.",
   },
   piercing_arrow: {
     id: "piercing_arrow",
     role: "archer",
     name: "관통 화살",
-    description: "궁수 공격의 관통 깊이가 기본 2층에서 레벨마다 1층 증가합니다.",
+    description: "궁수의 정밀 사격 피해가 레벨마다 1 증가합니다.",
   },
   crossfire: {
     id: "crossfire",
     role: "duo",
     name: "교차 사격",
-    description: "연계 공격에 필요한 교대 횟수가 기본 3회에서 레벨마다 1회 감소합니다.",
+    description: "연계 공격의 중심 대상 추가 피해가 레벨마다 1 증가합니다.",
   },
 };
 
 const state = {
   round: 0,
   shield: MAX_SHIELD,
-  counter: 0,
   link: 0,
   lastActor: null,
   taps: 0,
   totalTaps: 0,
-  board: [],
-  initialLayers: 0,
+  enemies: [],
+  waveIndex: 0,
+  totalEnemies: 0,
+  defeated: 0,
+  breached: 0,
   candidates: [],
   abilities: {},
   actorUse: { melee: 0, archer: 0, duo: 0 },
+  enemySequence: 0,
   locked: true,
 };
 
 const refs = {
-  blockLabel: document.querySelector("#blockLabel"),
   roundLabel: document.querySelector("#roundLabel"),
   shieldDisplay: document.querySelector("#shieldDisplay"),
-  counterDisplay: document.querySelector("#counterDisplay"),
+  enemyCountDisplay: document.querySelector("#enemyCountDisplay"),
   linkDisplay: document.querySelector("#linkDisplay"),
   patternLabel: document.querySelector("#patternLabel"),
   enemyName: document.querySelector("#enemyName"),
@@ -140,185 +158,50 @@ const refs = {
   helpButton: document.querySelector("#helpButton"),
 };
 
-function normalizeStack(stackString) {
-  const map = { R: "red", B: "blue", Y: "yellow" };
-  return stackString.split("").map((code) => map[code]);
+function getRoundTotalEnemies(roundData) {
+  return roundData.wave.reduce((sum, squad) => sum + squad.length, 0);
 }
 
-function countLayers(board = state.board) {
-  return board.reduce((sum, stack) => sum + stack.length, 0);
+function getRemainingEnemyCount() {
+  return Math.max(0, state.totalEnemies - state.defeated - state.breached);
 }
 
-function topColor(stack) {
-  return stack.length ? stack[0] : null;
-}
+function spawnNextSquad() {
+  const wave = ROUND_DATA[state.round].wave;
+  if (state.waveIndex >= wave.length) return;
 
-function getCardinalNeighbors(index) {
-  const row = Math.floor(index / BOARD_SIZE);
-  const column = index % BOARD_SIZE;
-  const neighbors = [];
-  if (row > 0) neighbors.push(index - BOARD_SIZE);
-  if (row < BOARD_SIZE - 1) neighbors.push(index + BOARD_SIZE);
-  if (column > 0) neighbors.push(index - 1);
-  if (column < BOARD_SIZE - 1) neighbors.push(index + 1);
-  return neighbors;
-}
-
-function getAllNeighbors(index) {
-  const row = Math.floor(index / BOARD_SIZE);
-  const column = index % BOARD_SIZE;
-  const neighbors = [];
-
-  for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
-    for (let columnOffset = -1; columnOffset <= 1; columnOffset += 1) {
-      if (rowOffset === 0 && columnOffset === 0) continue;
-      const nextRow = row + rowOffset;
-      const nextColumn = column + columnOffset;
-      if (
-        nextRow >= 0
-        && nextRow < BOARD_SIZE
-        && nextColumn >= 0
-        && nextColumn < BOARD_SIZE
-      ) {
-        neighbors.push((nextRow * BOARD_SIZE) + nextColumn);
-      }
-    }
-  }
-
-  return neighbors;
-}
-
-function getConnectedGroups() {
-  const visited = new Set();
-  const groups = [];
-
-  state.board.forEach((stack, startIndex) => {
-    const color = topColor(stack);
-    if (!color || visited.has(startIndex)) return;
-
-    const indexes = [];
-    const queue = [startIndex];
-    visited.add(startIndex);
-
-    while (queue.length) {
-      const index = queue.shift();
-      indexes.push(index);
-      getCardinalNeighbors(index).forEach((neighborIndex) => {
-        if (
-          !visited.has(neighborIndex)
-          && topColor(state.board[neighborIndex]) === color
-        ) {
-          visited.add(neighborIndex);
-          queue.push(neighborIndex);
-        }
-      });
-    }
-
-    groups.push({
-      id: `${color}-${Math.min(...indexes)}`,
-      color,
-      indexes,
+  wave[state.waveIndex].forEach(({ column, type }) => {
+    const meta = ENEMY_META[type];
+    state.enemySequence += 1;
+    state.enemies.push({
+      id: state.enemySequence,
+      type,
+      column,
+      row: 0,
+      hp: meta.hp,
+      maxHp: meta.hp,
     });
   });
-
-  return groups;
-}
-
-function getPierceDepth() {
-  return BASE_PIERCE_DEPTH + (state.abilities.piercing_arrow || 0);
-}
-
-function getLinkThreshold() {
-  return Math.max(1, BASE_LINK_THRESHOLD - (state.abilities.crossfire || 0));
-}
-
-function getGroupDepth(group) {
-  return Math.max(...group.indexes.map((index) => state.board[index].length));
-}
-
-function makeMeleeCandidate(group) {
-  return {
-    type: "melee",
-    color: group.color,
-    targetIndexes: [...group.indexes],
-    targetIndex: group.indexes[0],
-    value: group.indexes.length,
-  };
-}
-
-function makeArcherCandidate(index) {
-  const stack = state.board[index];
-  return {
-    type: "archer",
-    color: topColor(stack),
-    targetIndexes: [index],
-    targetIndex: index,
-    value: Math.min(stack.length, getPierceDepth()),
-  };
-}
-
-function makeDuoCandidate(group) {
-  const targetIndex = [...group.indexes]
-    .sort((left, right) => state.board[right].length - state.board[left].length)[0];
-  return {
-    type: "duo",
-    color: group.color,
-    targetIndexes: [...group.indexes],
-    targetIndex,
-    value: group.indexes.length + Math.min(2, Math.max(0, state.board[targetIndex].length - 1)),
-  };
-}
-
-function buildActionChoices() {
-  const groups = getConnectedGroups();
-  if (!groups.length) return [];
-
-  const meleePool = [...groups]
-    .sort((left, right) => {
-      const sizeDifference = right.indexes.length - left.indexes.length;
-      return sizeDifference || getGroupDepth(right) - getGroupDepth(left);
-    });
-
-  const archerPool = state.board
-    .map((stack, index) => ({ index, depth: stack.length }))
-    .filter(({ depth }) => depth > 0)
-    .sort((left, right) => right.depth - left.depth);
-
-  const choices = [
-    makeMeleeCandidate(meleePool[0]),
-    makeArcherCandidate(archerPool[0].index),
-  ];
-
-  if (state.link >= getLinkThreshold()) {
-    choices.push(makeDuoCandidate(meleePool[0]));
-  } else if (state.taps % 2 === 0 && meleePool[1]) {
-    choices.push(makeMeleeCandidate(meleePool[1]));
-  } else {
-    const alternateArcher = archerPool.find(({ index }) => index !== archerPool[0].index);
-    choices.push(
-      alternateArcher
-        ? makeArcherCandidate(alternateArcher.index)
-        : makeMeleeCandidate(meleePool[Math.min(1, meleePool.length - 1)]),
-    );
-  }
-
-  return choices;
+  state.waveIndex += 1;
 }
 
 function startRun() {
   Object.assign(state, {
     round: 0,
     shield: MAX_SHIELD,
-    counter: 0,
     link: 0,
     lastActor: null,
     taps: 0,
     totalTaps: 0,
-    board: [],
-    initialLayers: 0,
+    enemies: [],
+    waveIndex: 0,
+    totalEnemies: 0,
+    defeated: 0,
+    breached: 0,
     candidates: [],
     abilities: {},
     actorUse: { melee: 0, archer: 0, duo: 0 },
+    enemySequence: 0,
     locked: false,
   });
   closeModal();
@@ -328,21 +211,107 @@ function startRun() {
 function loadRound(roundIndex) {
   const data = ROUND_DATA[roundIndex];
   state.round = roundIndex;
-  state.counter = 0;
   state.link = 0;
   state.lastActor = null;
   state.taps = 0;
-  state.board = data.stacks.map(normalizeStack);
-  state.initialLayers = countLayers();
+  state.enemies = [];
+  state.waveIndex = 0;
+  state.totalEnemies = getRoundTotalEnemies(data);
+  state.defeated = 0;
+  state.breached = 0;
   state.locked = false;
+  spawnNextSquad();
   state.candidates = buildActionChoices();
   refs.feedbackText.textContent = "번호가 표시된 공격 후보 하나를 탭하세요.";
   render();
 }
 
+function getEnemyById(enemyId) {
+  return state.enemies.find((enemy) => enemy.id === enemyId);
+}
+
+function getThreatScore(enemy) {
+  const meta = ENEMY_META[enemy.type];
+  return (enemy.row * 20)
+    + (meta.speed * 6)
+    + (meta.breachDamage * 5)
+    + enemy.hp;
+}
+
+function getFrontEnemies() {
+  const frontRow = Math.max(...state.enemies.map((enemy) => enemy.row));
+  return state.enemies
+    .filter((enemy) => enemy.row === frontRow)
+    .sort((left, right) => left.column - right.column);
+}
+
+function makeMeleeCandidate(anchor) {
+  const targetIds = state.enemies
+    .filter((enemy) => (
+      enemy.row === anchor.row
+      && Math.abs(enemy.column - anchor.column) <= 1
+    ))
+    .map((enemy) => enemy.id);
+  return {
+    type: "melee",
+    anchorId: anchor.id,
+    targetIds,
+  };
+}
+
+function makeArcherCandidate(target) {
+  return {
+    type: "archer",
+    anchorId: target.id,
+    targetIds: [target.id],
+  };
+}
+
+function makeDuoCandidate(anchor) {
+  return {
+    type: "duo",
+    anchorId: anchor.id,
+    targetIds: state.enemies
+      .filter((enemy) => (
+        enemy.row === anchor.row
+        && Math.abs(enemy.column - anchor.column) <= 1
+      ))
+      .map((enemy) => enemy.id),
+  };
+}
+
+function buildActionChoices() {
+  if (!state.enemies.length) return [];
+
+  const frontEnemies = getFrontEnemies();
+  const threatOrder = [...state.enemies].sort((left, right) => (
+    getThreatScore(right) - getThreatScore(left)
+  ));
+  const primaryFront = frontEnemies[Math.floor(frontEnemies.length / 2)];
+  const choices = [
+    makeMeleeCandidate(primaryFront),
+    makeArcherCandidate(threatOrder[0]),
+  ];
+
+  if (state.link >= LINK_THRESHOLD) {
+    choices.push(makeDuoCandidate(primaryFront));
+  } else {
+    const alternateTarget = threatOrder.find((enemy) => enemy.id !== threatOrder[0].id);
+    const alternateFront = frontEnemies.find((enemy) => enemy.id !== primaryFront.id);
+    if (alternateTarget) {
+      choices.push(
+        state.lastActor === "archer" && alternateFront
+          ? makeMeleeCandidate(alternateFront)
+          : makeArcherCandidate(alternateTarget),
+      );
+    }
+  }
+
+  return choices;
+}
+
 function render() {
   renderHeader();
-  renderCounter();
   renderLink();
   renderBoard();
   renderAbilities();
@@ -355,7 +324,8 @@ function renderHeader() {
   refs.patternLabel.textContent = data.pattern;
   refs.enemyName.textContent = data.name;
   refs.roundGoal.textContent = data.goal;
-  refs.shieldDisplay.textContent = `${"◆".repeat(state.shield)}${"◇".repeat(MAX_SHIELD - state.shield)}`;
+  refs.shieldDisplay.textContent = `${"◆".repeat(Math.max(0, state.shield))}${"◇".repeat(Math.min(MAX_SHIELD, Math.max(0, MAX_SHIELD - state.shield)))}`;
+  refs.enemyCountDisplay.textContent = `${getRemainingEnemyCount()}체`;
   refs.tapCount.textContent = `탭 ${state.taps}회`;
 
   document.querySelectorAll("[data-round-dot]").forEach((dot, index) => {
@@ -364,72 +334,68 @@ function renderHeader() {
   });
 }
 
-function renderCounter() {
-  const threshold = ROUND_DATA[state.round].threshold;
-  refs.counterDisplay.innerHTML = "";
-  for (let index = 0; index < threshold; index += 1) {
-    const pip = document.createElement("i");
-    pip.classList.toggle("is-filled", index < state.counter);
-    refs.counterDisplay.appendChild(pip);
-  }
-  refs.counterDisplay.setAttribute("aria-label", `반격 게이지 ${state.counter} / ${threshold}`);
-}
-
 function renderLink() {
-  const threshold = getLinkThreshold();
   refs.linkDisplay.innerHTML = "";
-  for (let index = 0; index < threshold; index += 1) {
+  for (let index = 0; index < LINK_THRESHOLD; index += 1) {
     const pip = document.createElement("i");
     pip.classList.toggle("is-filled", index < state.link);
     refs.linkDisplay.appendChild(pip);
   }
-  refs.linkDisplay.classList.toggle("is-ready", state.link >= threshold);
+  refs.linkDisplay.classList.toggle("is-ready", state.link >= LINK_THRESHOLD);
   refs.linkDisplay.setAttribute(
     "aria-label",
-    state.link >= threshold ? "연계 공격 준비 완료" : `연계 게이지 ${state.link} / ${threshold}`,
+    state.link >= LINK_THRESHOLD ? "연계 공격 준비 완료" : `연계 게이지 ${state.link} / ${LINK_THRESHOLD}`,
   );
 }
 
-function getCandidateSlotsForCell(cellIndex) {
+function getCandidateSlotsForEnemy(enemyId) {
   return state.candidates
-    .map((candidate, candidateIndex) => (
-      candidate.targetIndexes.includes(cellIndex) ? candidateIndex + 1 : null
-    ))
+    .map((candidate, index) => (candidate.targetIds.includes(enemyId) ? index + 1 : null))
     .filter(Boolean);
 }
 
 function renderBoard() {
   refs.crystalGrid.innerHTML = "";
-  state.board.forEach((stack, index) => {
+
+  for (let cellIndex = 0; cellIndex < BOARD_SIZE * BOARD_SIZE; cellIndex += 1) {
+    const row = Math.floor(cellIndex / BOARD_SIZE);
+    const column = cellIndex % BOARD_SIZE;
+    const enemy = state.enemies.find((unit) => unit.row === row && unit.column === column);
     const cell = document.createElement("div");
-    const color = topColor(stack);
-    const candidateSlots = getCandidateSlotsForCell(index);
-    cell.className = `crystal-cell${color ? "" : " is-empty"}${candidateSlots.length ? " has-target" : ""}`;
-    cell.dataset.cellIndex = String(index);
-    if (color) cell.dataset.color = color;
+
+    if (!enemy) {
+      cell.className = "crystal-cell is-lane-empty";
+      cell.setAttribute("role", "gridcell");
+      cell.setAttribute("aria-label", `빈 전투선 ${row + 1}행 ${column + 1}열`);
+      refs.crystalGrid.appendChild(cell);
+      continue;
+    }
+
+    const meta = ENEMY_META[enemy.type];
+    const candidateSlots = getCandidateSlotsForEnemy(enemy.id);
+    cell.className = `crystal-cell enemy-unit${candidateSlots.length ? " has-target" : ""}`;
+    cell.dataset.color = enemy.type;
+    cell.dataset.enemyId = String(enemy.id);
     if (candidateSlots.length) cell.dataset.targetSlots = candidateSlots.join(" ");
     cell.setAttribute("role", "gridcell");
     cell.setAttribute(
       "aria-label",
-      color
-        ? `${COLOR_META[color].name} 결정, ${stack.length}층, 행동 후보 ${candidateSlots.join(", ")}의 대상`
-        : "제거된 결정",
+      `${meta.name}, 체력 ${enemy.hp}, 행동 후보 ${candidateSlots.join(", ")}의 대상`,
     );
-    cell.innerHTML = color
-      ? `
-        <span class="symbol">${COLOR_META[color].symbol}</span>
-        ${stack.length > 1 ? `<i class="depth">${stack.length}F</i>` : ""}
-        <span class="target-markers">
-          ${candidateSlots.map((slot) => `<i data-slot="${slot}">${slot}</i>`).join("")}
-        </span>
-      `
-      : "";
+    cell.innerHTML = `
+      <span class="enemy-tag">${meta.tag}</span>
+      <span class="symbol">${meta.symbol}</span>
+      <i class="depth">${enemy.hp}HP</i>
+      <span class="target-markers">
+        ${candidateSlots.map((slot) => `<i data-slot="${slot}">${slot}</i>`).join("")}
+      </span>
+    `;
     refs.crystalGrid.appendChild(cell);
-  });
+  }
 
-  const remaining = countLayers();
-  const progress = state.initialLayers
-    ? Math.round(((state.initialLayers - remaining) / state.initialLayers) * 100)
+  const resolved = state.defeated + state.breached;
+  const progress = state.totalEnemies
+    ? Math.round((resolved / state.totalEnemies) * 100)
     : 0;
   refs.clearProgress.style.width = `${progress}%`;
   refs.clearPercent.textContent = `${progress}%`;
@@ -454,13 +420,16 @@ function renderAbilities() {
 }
 
 function getCandidateDescription(candidate) {
+  const anchor = getEnemyById(candidate.anchorId);
+  if (!anchor) return "대상 없음";
+  const meta = ENEMY_META[anchor.type];
   if (candidate.type === "melee") {
-    return `${COLOR_META[candidate.color].name} 연결 ${candidate.targetIndexes.length}칸`;
+    return `전열 ${candidate.targetIds.length}체 · 피해 ${1 + (state.abilities.heavy_slash || 0)}`;
   }
   if (candidate.type === "archer") {
-    return `${COLOR_META[candidate.color].name} ${candidate.value}층 관통`;
+    return `${meta.name} · 피해 ${2 + (state.abilities.piercing_arrow || 0)}`;
   }
-  return `${COLOR_META[candidate.color].name} 표면 + 중심 관통`;
+  return `전열 ${candidate.targetIds.length}체 + 중심 관통`;
 }
 
 function renderCandidates() {
@@ -471,7 +440,6 @@ function renderCandidates() {
     button.type = "button";
     button.className = "action-button";
     button.dataset.role = candidate.type;
-    button.dataset.color = candidate.color;
     button.setAttribute(
       "aria-label",
       `${index + 1}번 ${actor.name} ${actor.action}, ${getCandidateDescription(candidate)}`,
@@ -481,7 +449,7 @@ function renderCandidates() {
       <span class="candidate-number">${index + 1}</span>
       <span class="action-symbol">${actor.symbol}</span>
       <strong>${actor.name} · ${actor.action}</strong>
-      <small>${COLOR_META[candidate.color].symbol} ${getCandidateDescription(candidate)}</small>
+      <small>${getCandidateDescription(candidate)}</small>
     `;
     button.addEventListener("click", () => attackWithCandidate(index));
     button.addEventListener("mouseenter", () => setCandidateFocus(index + 1));
@@ -493,63 +461,25 @@ function renderCandidates() {
 }
 
 function setCandidateFocus(slot) {
-  document.querySelectorAll(".crystal-cell").forEach((cell) => {
+  document.querySelectorAll(".enemy-unit").forEach((cell) => {
     const slots = (cell.dataset.targetSlots || "").split(" ");
     cell.classList.toggle("is-focused-target", Boolean(slot) && slots.includes(String(slot)));
   });
 }
 
-function removeLayer(index, amount = 1) {
-  let removed = 0;
-  while (removed < amount && state.board[index].length) {
-    state.board[index].shift();
-    removed += 1;
-  }
-  return removed;
+function damageEnemy(enemyId, damage) {
+  const enemy = getEnemyById(enemyId);
+  if (!enemy) return 0;
+  const appliedDamage = Math.min(enemy.hp, damage);
+  enemy.hp -= damage;
+  return appliedDamage;
 }
 
-function performMeleeAttack(candidate) {
-  const targetSet = new Set(candidate.targetIndexes);
-  const sweepLevel = state.abilities.spin_slash || 0;
-  const splashIndexes = new Set();
-
-  if (sweepLevel > 0) {
-    candidate.targetIndexes.forEach((index) => {
-      const neighbors = sweepLevel >= 2 ? getAllNeighbors(index) : getCardinalNeighbors(index);
-      neighbors.forEach((neighborIndex) => {
-        if (!targetSet.has(neighborIndex) && state.board[neighborIndex].length) {
-          splashIndexes.add(neighborIndex);
-        }
-      });
-    });
-  }
-
-  let removed = 0;
-  candidate.targetIndexes.forEach((index) => {
-    removed += removeLayer(index);
-  });
-  splashIndexes.forEach((index) => {
-    removed += removeLayer(index);
-  });
-  return { removed, splash: splashIndexes.size };
-}
-
-function performArcherAttack(candidate) {
-  const depth = getPierceDepth();
-  return {
-    removed: removeLayer(candidate.targetIndex, depth),
-    depth,
-  };
-}
-
-function performDuoAttack(candidate) {
-  let removed = 0;
-  candidate.targetIndexes.forEach((index) => {
-    removed += removeLayer(index);
-  });
-  const pierced = removeLayer(candidate.targetIndex, BASE_PIERCE_DEPTH);
-  removed += pierced;
-  return { removed, pierced };
+function removeDefeatedEnemies() {
+  const defeatedNow = state.enemies.filter((enemy) => enemy.hp <= 0).length;
+  state.defeated += defeatedNow;
+  state.enemies = state.enemies.filter((enemy) => enemy.hp > 0);
+  return defeatedNow;
 }
 
 function updateLink(type) {
@@ -560,9 +490,74 @@ function updateLink(type) {
   }
 
   if (state.lastActor && state.lastActor !== type) {
-    state.link = Math.min(getLinkThreshold(), state.link + 1);
+    state.link = Math.min(LINK_THRESHOLD, state.link + 1);
+  } else if (state.lastActor === type) {
+    state.link = 0;
   }
   state.lastActor = type;
+}
+
+function performAttack(candidate) {
+  if (candidate.type === "melee") {
+    const damage = 1 + (state.abilities.heavy_slash || 0);
+    candidate.targetIds.forEach((enemyId) => damageEnemy(enemyId, damage));
+    return `${candidate.targetIds.length}체에 ${damage}피해`;
+  }
+
+  if (candidate.type === "archer") {
+    const damage = 2 + (state.abilities.piercing_arrow || 0);
+    damageEnemy(candidate.anchorId, damage);
+    return `중심 대상에 ${damage}피해`;
+  }
+
+  const meleeDamage = 1;
+  const centerDamage = 2 + (state.abilities.crossfire || 0);
+  candidate.targetIds.forEach((enemyId) => damageEnemy(enemyId, meleeDamage));
+  damageEnemy(candidate.anchorId, centerDamage);
+  return `${candidate.targetIds.length}체 베기 + 중심 ${centerDamage}피해`;
+}
+
+function advanceEnemies() {
+  let shieldDamage = 0;
+  const survivors = [];
+  let breachedCount = 0;
+
+  for (let column = 0; column < BOARD_SIZE; column += 1) {
+    const occupiedRows = new Set();
+    const laneEnemies = state.enemies
+      .filter((enemy) => enemy.column === column)
+      .sort((left, right) => right.row - left.row);
+
+    laneEnemies.forEach((enemy) => {
+      let nextRow = enemy.row + ENEMY_META[enemy.type].speed;
+      if (nextRow >= BOARD_SIZE) {
+        shieldDamage += ENEMY_META[enemy.type].breachDamage;
+        breachedCount += 1;
+        return;
+      }
+
+      while (occupiedRows.has(nextRow) && nextRow > enemy.row) {
+        nextRow -= 1;
+      }
+      enemy.row = nextRow;
+      occupiedRows.add(nextRow);
+      survivors.push(enemy);
+    });
+  }
+
+  state.breached += breachedCount;
+  state.shield -= shieldDamage;
+  state.enemies = survivors;
+  spawnNextSquad();
+
+  return shieldDamage;
+}
+
+function isRoundClear() {
+  return (
+    state.waveIndex >= ROUND_DATA[state.round].wave.length
+    && state.enemies.length === 0
+  );
 }
 
 function attackWithCandidate(candidateIndex) {
@@ -571,46 +566,25 @@ function attackWithCandidate(candidateIndex) {
   if (!candidate) return;
 
   state.locked = true;
-  let result;
-
-  if (candidate.type === "melee") {
-    result = performMeleeAttack(candidate);
-  } else if (candidate.type === "archer") {
-    result = performArcherAttack(candidate);
-  } else {
-    result = performDuoAttack(candidate);
-  }
-
+  const actor = ACTOR_META[candidate.type];
+  const attackSummary = performAttack(candidate);
+  const defeatedNow = removeDefeatedEnemies();
+  updateLink(candidate.type);
   state.taps += 1;
   state.totalTaps += 1;
-  state.counter += 1;
   state.actorUse[candidate.type] += 1;
-  updateLink(candidate.type);
+  const shieldDamage = advanceEnemies();
 
-  const actor = ACTOR_META[candidate.type];
-  const detail = candidate.type === "melee" && result.splash
-    ? ` · 주변 ${result.splash}칸 추가 타격`
-    : candidate.type === "archer"
-      ? ` · 최대 ${result.depth}층 관통`
-      : candidate.type === "duo"
-        ? ` · 중심 ${result.pierced}층 추가 관통`
-        : "";
-  const linkReady = state.link >= getLinkThreshold();
-  refs.feedbackText.textContent = `${actor.name} ${actor.action}로 결정 ${result.removed}개 제거${detail}${linkReady ? " · 연계 공격 준비 완료" : ""}`;
+  refs.feedbackText.textContent = `${actor.name} ${actor.action} · ${attackSummary} · ${defeatedNow}체 처치`;
+  if (shieldDamage > 0) {
+    refs.feedbackText.textContent += ` · 돌파 피해 ${shieldDamage}`;
+  } else if (state.link >= LINK_THRESHOLD) {
+    refs.feedbackText.textContent += " · 연계 공격 준비 완료";
+  }
   flashDamage();
 
-  const threshold = ROUND_DATA[state.round].threshold;
-  const boardCleared = countLayers() === 0;
-  if (state.counter >= threshold && !boardCleared) {
-    state.counter = 0;
-    state.shield -= 1;
-    refs.feedbackText.textContent += " · 적의 반격으로 보호막 1칸 손실";
-  } else if (state.counter >= threshold && boardCleared) {
-    state.counter = 0;
-    refs.feedbackText.textContent += " · 마무리 공격으로 반격 무효";
-  }
-
-  state.candidates = boardCleared ? [] : buildActionChoices();
+  const roundClear = isRoundClear();
+  state.candidates = roundClear ? [] : buildActionChoices();
   render();
 
   if (state.shield <= 0) {
@@ -618,7 +592,7 @@ function attackWithCandidate(candidateIndex) {
     return;
   }
 
-  if (boardCleared) {
+  if (roundClear) {
     window.setTimeout(handleRoundClear, 500);
     return;
   }
@@ -647,15 +621,15 @@ function handleRoundClear() {
 }
 
 function showIntroModal() {
-  refs.modalEyebrow.textContent = "4 ROUND DUO PLAYTEST";
-  refs.modalTitle.textContent = "넓게 베고, 깊게 꿰뚫으세요";
+  refs.modalEyebrow.textContent = "4 ROUND WAVE PLAYTEST";
+  refs.modalTitle.textContent = "진격하는 적을 막으세요";
   refs.modalBody.innerHTML = `
-    <p>번호가 표시된 행동 후보 하나를 탭하면 두 캐릭터가 즉시 공격합니다.</p>
+    <p>공격 후보 하나를 탭하면 공격 후 모든 적이 아래로 전진합니다.</p>
     <ul>
-      <li><strong>근접</strong>: 연결된 같은 색 덩어리의 표면을 한 번에 제거</li>
-      <li><strong>궁수</strong>: 선택된 결정 하나를 기본 2층 관통</li>
-      <li><strong>연계</strong>: 근접과 궁수를 교대해 게이지를 채우면 등장</li>
-      <li>반격 전에 모든 결정을 제거하면 라운드 클리어</li>
+      <li><strong>전사</strong>: 가장 가까운 적 주변을 3칸 폭으로 공격</li>
+      <li><strong>궁수</strong>: 거리 제한 없이 적 하나에게 2피해</li>
+      <li><strong>연계</strong>: 전사와 궁수를 교대하면 합동 공격 등장</li>
+      <li>적이 최하단을 돌파하면 보호막 피해</li>
     </ul>
   `;
   refs.modalActions.innerHTML = "";
@@ -668,19 +642,17 @@ function showHelpModal() {
   state.locked = true;
   renderCandidates();
   refs.modalEyebrow.textContent = "HOW TO PLAY";
-  refs.modalTitle.textContent = "세 후보 중 하나를 탭하세요";
+  refs.modalTitle.textContent = "위험한 적부터 저지하세요";
   refs.modalBody.innerHTML = `
-    <p>판의 <strong>1·2·3 번호</strong>와 하단 행동 후보의 번호가 공격 위치를 표시합니다.</p>
     <ul>
-      <li>근접은 상하좌우로 연결된 같은 색 표면을 공격합니다.</li>
-      <li>궁수는 표시된 한 칸을 깊게 관통합니다.</li>
-      <li>근접과 궁수를 번갈아 쓰면 연계 게이지가 증가합니다.</li>
-      <li>연계 준비가 끝나면 세 번째 후보에 합동 공격이 등장합니다.</li>
-      <li>반격 게이지가 가득 차면 보호막이 1칸 감소합니다.</li>
+      <li><strong>FAST</strong>: 한 번에 2칸 전진</li>
+      <li><strong>ARMOR</strong>: 체력 2, 궁수가 한 번에 처치</li>
+      <li><strong>DANGER</strong>: 돌파 시 보호막 2피해</li>
+      <li>같은 캐릭터를 연속 사용하면 연계 게이지가 초기화됩니다.</li>
     </ul>
   `;
   refs.modalActions.innerHTML = "";
-  refs.modalActions.appendChild(makePrimaryButton("계속하기", () => {
+  refs.modalActions.appendChild(makePrimaryButton("확인", () => {
     closeModal();
     state.locked = wasLocked;
     renderCandidates();
@@ -696,7 +668,6 @@ function showAbilityModal() {
       <strong>다음 라운드 예고</strong>
       ${ROUND_DATA[state.round].nextIntel}
     </div>
-    <p>근접의 범위, 궁수의 깊이, 두 캐릭터의 연계 중 하나를 강화합니다.</p>
   `;
   refs.modalActions.innerHTML = "";
 
@@ -728,7 +699,7 @@ function chooseAbility(abilityId) {
 
 function showRoundClearModal() {
   refs.modalEyebrow.textContent = `ROUND ${state.round + 1} CLEAR`;
-  refs.modalTitle.textContent = "다음 기억체가 감지되었습니다";
+  refs.modalTitle.textContent = "다음 웨이브가 감지되었습니다";
   refs.modalBody.innerHTML = `
     <div class="intel-card">
       <strong>다음 라운드 예고</strong>
@@ -746,7 +717,7 @@ function showRoundClearModal() {
 
 function calculateGrade() {
   if (state.shield === MAX_SHIELD && state.totalTaps <= 24) return "S";
-  if (state.shield >= 2 && state.totalTaps <= 30) return "A";
+  if (state.shield >= 2) return "A";
   if (state.shield >= 1) return "B";
   return "C";
 }
@@ -761,16 +732,15 @@ function showResultModal() {
   const grade = calculateGrade();
   const dominantTactic = getDominantTactic();
   refs.modalEyebrow.textContent = "BLOCK A COMPLETE";
-  refs.modalTitle.textContent = "기억 복원이 완료되었습니다";
+  refs.modalTitle.textContent = "빙결 해안 방어 완료";
   refs.modalBody.innerHTML = `
     <div class="result-card">
-      <strong>복원 등급</strong>
+      <strong>방어 등급</strong>
       <div class="result-grade">${grade}</div>
       <p>주력 전술: ${ACTOR_META[dominantTactic].symbol} ${ACTOR_META[dominantTactic].name}</p>
       <p>총 탭 수: ${state.totalTaps} · 잔여 보호막: ${state.shield}</p>
-      <p>근접 ${state.actorUse.melee}회 · 궁수 ${state.actorUse.archer}회 · 연계 ${state.actorUse.duo}회</p>
+      <p>전사 ${state.actorUse.melee}회 · 궁수 ${state.actorUse.archer}회 · 연계 ${state.actorUse.duo}회</p>
     </div>
-    <p>다른 능력과 공격 순서를 선택해 행동 수와 피격 횟수를 비교할 수 있습니다.</p>
   `;
   refs.modalActions.innerHTML = "";
   refs.modalActions.appendChild(makePrimaryButton("다른 빌드로 다시 시작", startRun));
@@ -779,13 +749,13 @@ function showResultModal() {
 
 function showFailModal() {
   refs.modalEyebrow.textContent = "RUN FAILED";
-  refs.modalTitle.textContent = "보호막이 모두 소진되었습니다";
+  refs.modalTitle.textContent = "방어선이 돌파되었습니다";
   refs.modalBody.innerHTML = `
     <div class="result-card">
       <strong>도달 기록</strong>
       <p>ROUND ${state.round + 1} · 총 탭 ${state.totalTaps}회</p>
     </div>
-    <p>넓은 덩어리는 근접으로, 두꺼운 결정은 궁수로 처리하고 교대 공격을 이어가 보세요.</p>
+    <p>속공형과 위험형을 궁수로 먼저 제거하고, 전열이 모이면 전사로 베어보세요.</p>
   `;
   refs.modalActions.innerHTML = "";
   refs.modalActions.appendChild(makePrimaryButton("블록 다시 시작", startRun));

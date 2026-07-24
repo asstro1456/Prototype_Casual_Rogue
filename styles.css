@@ -198,6 +198,10 @@ h1 {
   letter-spacing: 0.12em;
 }
 
+#enemyCountDisplay {
+  color: #cae4ff;
+}
+
 .counter-pips {
   display: flex;
   align-items: center;
@@ -288,6 +292,23 @@ h1 {
   background:
     radial-gradient(circle, rgba(157, 140, 255, 0.15), transparent 54%),
     #090e1b;
+}
+
+.portrait-stage::after {
+  position: absolute;
+  z-index: 3;
+  right: 8%;
+  bottom: 8px;
+  left: 8%;
+  padding-top: 4px;
+  border-top: 2px solid rgba(255, 113, 135, 0.58);
+  color: rgba(255, 113, 135, 0.82);
+  content: "DEFENSE LINE";
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-align: center;
+  pointer-events: none;
 }
 
 .party-portrait {
@@ -468,6 +489,46 @@ h1 {
 .crystal-cell.is-empty {
   opacity: 0;
   transform: scale(0.55) rotate(12deg);
+}
+
+.crystal-cell.is-lane-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: none;
+  opacity: 0.48;
+}
+
+.crystal-cell.is-lane-empty::before {
+  display: none;
+}
+
+.crystal-cell.enemy-unit {
+  animation: enemy-enter 180ms ease-out;
+}
+
+.enemy-tag {
+  position: absolute;
+  z-index: 4;
+  top: 4px;
+  right: 4px;
+  font-size: 5px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.crystal-cell[data-color="red"] .enemy-tag { color: #ffe0e5; }
+.crystal-cell[data-color="blue"] .enemy-tag { color: #e3f1ff; }
+.crystal-cell[data-color="yellow"] .enemy-tag { color: #3c2a00; }
+
+@keyframes enemy-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .crystal-cell.is-clearing {

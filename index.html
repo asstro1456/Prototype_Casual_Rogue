@@ -4,17 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b1020">
-  <title>프리즘 리콜 — 듀오 전투 프로토타입</title>
-  <link rel="stylesheet" href="./styles.css?v=0.1.0">
+  <title>프리즘 리콜 — 하강 웨이브 프로토타입</title>
+  <link rel="stylesheet" href="./styles.css?v=0.2.0">
 </head>
 <body>
   <main class="app-shell">
     <section class="game-card" aria-label="프리즘 리콜 게임 화면">
       <header class="topbar">
         <div class="title-lockup">
-          <p class="eyebrow">PRISM RECALL // DUO COMBAT PROTOTYPE</p>
+          <p class="eyebrow">PRISM RECALL // DESCENT WAVE PROTOTYPE</p>
           <h1>프리즘 리콜</h1>
-          <span class="header-version" data-app-version>v0.1.0 · DUO COMBAT</span>
+          <span class="header-version" data-app-version>v0.2.0 · DESCENT WAVE</span>
         </div>
         <button id="helpButton" class="icon-button" type="button" aria-label="게임 방법 보기">?</button>
       </header>
@@ -37,9 +37,9 @@
           <span>보호막</span>
           <strong id="shieldDisplay" aria-label="남은 보호막"></strong>
         </div>
-        <div class="hud-item counter-item">
-          <span>반격 게이지</span>
-          <div id="counterDisplay" class="counter-pips" aria-label="반격 게이지"></div>
+        <div class="hud-item">
+          <span>남은 적</span>
+          <strong id="enemyCountDisplay" aria-label="남은 적 수">0</strong>
         </div>
         <div class="hud-item link-item">
           <span>연계 게이지</span>
@@ -53,7 +53,7 @@
             <span id="patternLabel" class="pattern-badge">온보딩형</span>
             <h2 id="enemyName">기억체 01</h2>
           </div>
-          <p id="roundGoal">근접과 궁수를 교대해 결정 외피를 공략하세요.</p>
+          <p id="roundGoal">아래로 진격하는 적을 저지하세요.</p>
         </div>
 
         <div class="portrait-stage">
@@ -73,12 +73,12 @@
               <b>ARCHER</b>
             </div>
           </div>
-          <div id="crystalGrid" class="crystal-grid" role="grid" aria-label="적의 결정 외피"></div>
+          <div id="crystalGrid" class="crystal-grid" role="grid" aria-label="5열 전투선"></div>
           <div id="damageFlash" class="damage-flash" aria-hidden="true"></div>
         </div>
 
         <div class="progress-row">
-          <span>외피 제거</span>
+          <span>웨이브 처리</span>
           <div class="progress-bar"><i id="clearProgress"></i></div>
           <strong id="clearPercent">0%</strong>
         </div>
@@ -109,7 +109,7 @@
 
   <div id="modalBackdrop" class="modal-backdrop is-open">
     <section id="modalPanel" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
-      <span class="modal-version" data-app-version>v0.1.0 · DUO COMBAT</span>
+      <span class="modal-version" data-app-version>v0.2.0 · DESCENT WAVE</span>
       <p id="modalEyebrow" class="eyebrow">4 ROUND PLAYTEST</p>
       <h2 id="modalTitle">넓게 베고, 깊게 꿰뚫으세요</h2>
       <div id="modalBody" class="modal-body"></div>
@@ -117,6 +117,6 @@
     </section>
   </div>
 
-  <script src="./app.js?v=0.1.0"></script>
+  <script src="./app.js?v=0.2.0"></script>
 </body>
 </html>
