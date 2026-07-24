@@ -4,17 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b1020">
-  <title>프리즘 리콜 — 하강 웨이브 프로토타입</title>
-  <link rel="stylesheet" href="./styles.css?v=0.2.0">
+  <title>프리즘 리콜 — 심플 라인 프로토타입</title>
+  <link rel="stylesheet" href="./styles.css?v=0.3.0">
 </head>
 <body>
   <main class="app-shell">
     <section class="game-card" aria-label="프리즘 리콜 게임 화면">
       <header class="topbar">
         <div class="title-lockup">
-          <p class="eyebrow">PRISM RECALL // DESCENT WAVE PROTOTYPE</p>
+          <p class="eyebrow">PRISM RECALL // SIMPLE LINE PROTOTYPE</p>
           <h1>프리즘 리콜</h1>
-          <span class="header-version" data-app-version>v0.2.0 · DESCENT WAVE</span>
+          <span class="header-version" data-app-version>v0.3.0 · SIMPLE LINE</span>
         </div>
         <button id="helpButton" class="icon-button" type="button" aria-label="게임 방법 보기">?</button>
       </header>
@@ -40,10 +40,6 @@
         <div class="hud-item">
           <span>남은 적</span>
           <strong id="enemyCountDisplay" aria-label="남은 적 수">0</strong>
-        </div>
-        <div class="hud-item link-item">
-          <span>연계 게이지</span>
-          <div id="linkDisplay" class="link-pips" aria-label="연계 게이지"></div>
         </div>
       </section>
 
@@ -84,22 +80,12 @@
         </div>
       </section>
 
-      <section class="ability-strip" aria-label="보유 능력">
-        <div class="section-heading">
-          <span>런 능력</span>
-          <small>현재 블록에서만 유지</small>
-        </div>
-        <div id="abilityChips" class="ability-chips">
-          <span class="empty-chip">아직 획득한 능력이 없습니다.</span>
-        </div>
-      </section>
-
       <section class="action-zone">
         <div class="section-heading">
-          <span>행동 후보 선택</span>
+          <span>캐릭터 선택</span>
           <small id="tapCount">탭 0회</small>
         </div>
-        <div id="actionChoices" class="action-choices" aria-label="공격 행동 후보"></div>
+        <div id="actionChoices" class="action-choices character-actions" aria-label="전사 또는 궁수 선택"></div>
         <div class="action-footer">
           <p id="feedbackText" role="status">번호가 표시된 공격 후보 하나를 탭하세요.</p>
         </div>
@@ -109,7 +95,7 @@
 
   <div id="modalBackdrop" class="modal-backdrop is-open">
     <section id="modalPanel" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
-      <span class="modal-version" data-app-version>v0.2.0 · DESCENT WAVE</span>
+      <span class="modal-version" data-app-version>v0.3.0 · SIMPLE LINE</span>
       <p id="modalEyebrow" class="eyebrow">4 ROUND PLAYTEST</p>
       <h2 id="modalTitle">넓게 베고, 깊게 꿰뚫으세요</h2>
       <div id="modalBody" class="modal-body"></div>
@@ -117,6 +103,6 @@
     </section>
   </div>
 
-  <script src="./app.js?v=0.2.0"></script>
+  <script src="./app.js?v=0.3.0"></script>
 </body>
 </html>
