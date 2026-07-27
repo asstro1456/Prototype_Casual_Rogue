@@ -60,12 +60,22 @@ body {
 
 .topbar {
   display: grid;
-  grid-template-columns: 76px 1fr 42px;
+  grid-template-columns: 76px 1fr 86px;
   align-items: center;
   min-height: 76px;
   padding: 12px 17px;
   border-bottom: 1px solid var(--line);
   background: rgba(8, 18, 37, .82);
+}
+
+.header-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.boss-info-button {
+  color: #ffd88c;
 }
 
 .header-version {
@@ -458,6 +468,19 @@ body {
   box-shadow: 0 0 10px rgba(78, 209, 255, .7);
 }
 
+.grid-cell.is-link-endpoint::before {
+  outline: 2px solid rgba(255, 220, 125, .9);
+  outline-offset: 4px;
+  animation: link-endpoint-pulse 1.15s ease-in-out infinite alternate;
+}
+
+@keyframes link-endpoint-pulse {
+  to {
+    outline-color: rgba(255, 220, 125, .35);
+    box-shadow: 0 0 18px rgba(255, 205, 91, .9);
+  }
+}
+
 .grid-cell.is-corrupted {
   background:
     linear-gradient(45deg, transparent 41%, rgba(204, 125, 236, .26) 42%, rgba(204, 125, 236, .26) 58%, transparent 59%),
@@ -507,6 +530,16 @@ body {
   filter: grayscale(.45);
 }
 
+.enemy.is-hit-preview:not(.is-defeat-preview) {
+  border-color: #fff2ab;
+  filter: brightness(1.18);
+}
+
+.enemy.is-shield-break-preview .enemy-shield {
+  color: #fff4bb;
+  text-decoration: line-through;
+}
+
 .enemy.is-ability-preview {
   box-shadow:
     0 0 0 2px rgba(255, 220, 130, .72),
@@ -522,6 +555,31 @@ body {
   content: "";
   border-radius: 90% 10%;
   background: #ff9b7e;
+}
+
+.enemy.is-boss {
+  width: 78%;
+  border-width: 3px;
+  border-color: #ffe2a0;
+  color: #291337;
+  background: linear-gradient(145deg, #fff0ac, #d77cf3 58%, #6f3ca5);
+  box-shadow:
+    0 6px 14px rgba(1, 6, 19, .52),
+    0 0 18px rgba(224, 132, 255, .66);
+}
+
+.enemy-shield {
+  position: absolute;
+  right: -34%;
+  bottom: -20%;
+  padding: 1px 3px;
+  border: 1px solid rgba(181, 232, 255, .75);
+  border-radius: 6px;
+  color: #d9f5ff;
+  font-size: clamp(7px, 1.7vw, 10px);
+  line-height: 1.2;
+  background: rgba(15, 55, 92, .94);
+  box-shadow: 0 0 8px rgba(94, 203, 255, .55);
 }
 
 .enemy::before {
@@ -549,11 +607,24 @@ body {
   font-size: clamp(13px, 3.2vw, 18px);
   line-height: 1;
   text-shadow: 0 1px 4px rgba(58, 13, 28, .7);
+  pointer-events: none;
+  transform:
+    translate(
+      calc(var(--move-x) * 50%),
+      calc(var(--move-y) * 50%)
+    );
 }
 
 .enemy-intent.is-stopped {
   overflow: hidden;
   border-radius: 5px;
+  transform: none;
+}
+
+.enemy-intent.is-boss-intent {
+  color: #ffe7a6;
+  font-size: clamp(16px, 3.7vw, 22px);
+  text-shadow: 0 0 8px rgba(191, 93, 226, .9);
 }
 
 .enemy-stop-icon {
@@ -561,6 +632,21 @@ body {
   width: 74%;
   height: 74%;
   object-fit: contain;
+}
+
+.summon-ghost {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  width: 58%;
+  aspect-ratio: 1;
+  border: 2px dashed rgba(255, 216, 131, .9);
+  border-radius: 50%;
+  place-items: center;
+  color: rgba(255, 228, 168, .9);
+  background: rgba(149, 82, 178, .28);
+  box-shadow: 0 0 14px rgba(222, 128, 255, .48);
+  opacity: .72;
 }
 
 .path-layer {
@@ -584,6 +670,11 @@ body {
   stroke-width: 8px;
   opacity: .82;
   filter: drop-shadow(0 0 5px currentColor);
+}
+
+.completed-path.is-link-preview {
+  opacity: .2;
+  stroke-dasharray: 8 7;
 }
 
 .preview-path {
@@ -728,6 +819,27 @@ body {
   color: #657b98;
   font-size: 7px;
   text-align: center;
+}
+
+.rune-replace-button {
+  display: block;
+  min-height: 22px;
+  margin: 4px auto 0;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 220, 125, .42);
+  border-radius: 8px;
+  color: #ffe2a2;
+  font-size: 7px;
+  font-weight: 900;
+  background: rgba(101, 72, 30, .52);
+  cursor: pointer;
+}
+
+.rune-replace-button:hover,
+.rune-replace-button:focus-visible {
+  outline: none;
+  border-color: #ffe19b;
+  filter: brightness(1.12);
 }
 
 .rune-card.is-complete small {
@@ -957,6 +1069,37 @@ body {
   margin: 18px 0;
 }
 
+.boss-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.boss-info-grid div {
+  padding: 13px 5px;
+  border: 1px solid rgba(217, 164, 255, .2);
+  border-radius: 14px;
+  text-align: center;
+  background: rgba(60, 28, 83, .36);
+}
+
+.boss-info-grid span,
+.boss-info-grid strong {
+  display: block;
+}
+
+.boss-info-grid span {
+  color: #9c86b5;
+  font-size: 8px;
+}
+
+.boss-info-grid strong {
+  margin-top: 4px;
+  color: #f1dcff;
+  font-size: 13px;
+}
+
 .result-grid div {
   padding: 14px 5px;
   border: 1px solid rgba(159, 215, 245, .12);
@@ -1118,6 +1261,15 @@ body {
 }
 
 @media (max-width: 370px) {
+  .topbar {
+    grid-template-columns: 65px 1fr 76px;
+    padding-inline: 10px;
+  }
+
+  .icon-button {
+    width: 34px;
+  }
+
   .play-layout {
     grid-template-columns: 80px minmax(0, 1fr);
     gap: 7px;

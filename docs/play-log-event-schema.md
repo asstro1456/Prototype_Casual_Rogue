@@ -70,12 +70,15 @@
 - `blocked_by_trace`
 - `blocked_by_corruption`
 
-## 아직 연결하지 않은 이벤트
+## 기능별 연결 상태
 
-현재 게임에 해당 기능이 없으므로 다음 이벤트는 발생시키지 않는다.
+현재 게임은 진행 복원과 보스 흐름에서 다음 이벤트를 발생시킨다.
 
 - `state_restore`
 - `boss_start`, `boss_info_view`, `boss_end`
+
+현재 게임에 해당 기능이 없으므로 다음 이벤트는 발생시키지 않는다.
+
 - `tool_offer`, `tool_acquire_free`, `tool_purchase`, `tool_use`, `clear_after_tool`
 - `ad_offer`, `ad_start`, `ad_complete`, `ad_fail`, `ad_exit`
 

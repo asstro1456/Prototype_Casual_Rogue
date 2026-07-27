@@ -1,4 +1,4 @@
-const APP_VERSION = "0.0.9";
+const APP_VERSION = "0.1.0";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -6,24 +6,51 @@ const STAGES_PER_CHAPTER = 3;
 const FLOORS_PER_STAGE = 3;
 const TOTAL_FLOORS_PER_CHAPTER = STAGES_PER_CHAPTER * FLOORS_PER_STAGE;
 const EXPERIENCE_PER_LEVEL = 7;
-const COMBAT_ABILITIES = [
+const SAVE_KEY = "rune-trace.run-state.v1";
+const ALL_ABILITIES = [
   {
     id: "temptation",
     name: "유혹",
-    description: "새 룬에 이동이 막힌 적을 유인해 추가 처치",
+    category: "combat",
+    maxLevel: 3,
+    description: "새 룬에 이동이 막힌 적을 유인해 추가 피격",
   },
   {
-    id: "continuous-defeat",
-    name: "연속 격파",
-    description: "직접 2체 이상 처치 시 끝점과 가까운 적을 추가 처치",
+    id: "ricochet",
+    name: "도탄",
+    category: "combat",
+    maxLevel: 3,
+    description: "직접 2체 이상 처치 시 가까운 일반 적을 추가 피격",
   },
   {
     id: "endpoint-slash",
     name: "끝점 참격",
+    category: "combat",
+    maxLevel: 3,
     description: "룬 끝점의 진행 방향에 추가 공격 범위 생성",
   },
+  {
+    id: "corruption-ignore",
+    name: "오염 무시",
+    category: "puzzle",
+    maxLevel: 1,
+    description: "플로어당 한 번 오염 칸 1개를 경로로 통과",
+  },
+  {
+    id: "rune-link",
+    name: "룬 연결",
+    category: "puzzle",
+    maxLevel: 1,
+    description: "기존 흔적 끝점에서 새 룬을 이어 이전 흔적 제거",
+  },
+  {
+    id: "rune-replace",
+    name: "룬 교체",
+    category: "puzzle",
+    maxLevel: 1,
+    description: "플로어당 한 번 남은 룬을 다른 기본 형태로 교체",
+  },
 ];
-
 const RUNE_TEMPLATES = [
   {
     id: "line",
@@ -106,6 +133,7 @@ const refs = {
   resetButton: document.querySelector("#resetButton"),
   abilityList: document.querySelector("#abilityList"),
   helpButton: document.querySelector("#helpButton"),
+  bossInfoButton: document.querySelector("#bossInfoButton"),
   modalBackdrop: document.querySelector("#modalBackdrop"),
   modalPanel: document.querySelector("#modalPanel"),
   modalClose: document.querySelector("#modalClose"),
@@ -131,7 +159,17 @@ const state = {
   level: 1,
   abilities: [],
   directDefeated: 0,
-  continuousDefeatUsed: false,
+  ricochetUsed: false,
+  puzzleUses: {
+    corruptionIgnore: false,
+    runeLink: false,
+    runeReplace: false,
+  },
+  bossConfigs: [],
+  pendingAbilityChoices: [],
+  abilityChoiceLocks: {},
+  replacementSerial: 0,
+  randomState: Date.now() >>> 0,
   floorStartExperience: 0,
   floorStartLevel: 1,
   floorStartAbilities: [],
@@ -150,32 +188,26 @@ const state = {
   pathStartedAt: 0,
   tutorialStartedAt: 0,
   lastFailureReason: null,
+  restoredFromSave: false,
 };
 
 const pathVariantCache = new Map();
 const pathSequenceCache = new Map();
-const placementVariantCache = new Map();
 
 function cellKey(row, col) {
   return `${row}:${col}`;
 }
 
 function abilityById(abilityId) {
-  return COMBAT_ABILITIES.find((ability) => ability.id === abilityId);
+  return ALL_ABILITIES.find((ability) => ability.id === abilityId);
 }
 
 function abilityLevel(abilityId) {
   return state.abilities.filter((entry) => entry === abilityId).length;
 }
 
-function activeStandaloneAbility() {
-  const owned = COMBAT_ABILITIES
-    .map((ability) => ({
-      ...ability,
-      level: abilityLevel(ability.id),
-    }))
-    .filter((ability) => ability.level > 0);
-  return owned.length === 1 ? owned[0] : null;
+function hasAbility(abilityId) {
+  return abilityLevel(abilityId) > 0;
 }
 
 function currentStage() {
@@ -186,13 +218,17 @@ function currentFloorInStage() {
   return ((state.floor - 1) % FLOORS_PER_STAGE) + 1;
 }
 
+function completedRuneCount() {
+  return state.runes.filter((rune) => rune.complete).length;
+}
+
 function stageId() {
   return `chapter_01_stage_${currentStage()}`;
 }
 
 function elapsedSince(startedAt) {
   return startedAt > 0
-    ? Math.max(0, Math.round(performance.now() - startedAt))
+    ? Math.max(0, Date.now() - startedAt)
     : 0;
 }
 
@@ -206,7 +242,7 @@ function playLogContext() {
     stageId: stageId(),
     floorIndex: state.floor,
     running: state.running,
-    completedRunes: state.completedPaths.length,
+    completedRunes: completedRuneCount(),
   };
 }
 
@@ -245,7 +281,7 @@ function floorEndPayload(success, failureReason = null) {
     success,
     failure_reason: failureReason,
     duration_ms: elapsedSince(state.floorStartedAt),
-    completed_runes: state.completedPaths.length,
+    completed_runes: completedRuneCount(),
     direct_defeated: state.directDefeated,
     ability_defeated: state.defeated - state.directDefeated,
     surviving_enemies: state.enemies.length,
@@ -263,10 +299,53 @@ function isChapterFinalFloor() {
   return state.floor === TOTAL_FLOORS_PER_CHAPTER;
 }
 
+function isBossFloor() {
+  return isStageFinalFloor();
+}
+
+function currentBossConfig() {
+  return state.bossConfigs[currentStage() - 1] ?? null;
+}
+
+function createBossConfigs() {
+  const earlyVariants = shuffle(["amplified-shield", "reinforcement"]);
+  return Array.from({ length: STAGES_PER_CHAPTER }, (_, index) => {
+    const stage = index + 1;
+    const baseShieldCount = stage === 3 ? 2 : 1;
+    const variant = stage === 3 ? "reinforcement" : earlyVariants[index];
+    return {
+      stage,
+      type: "moving-boss",
+      variant,
+      baseShieldCount,
+      shieldCount:
+        baseShieldCount + (variant === "amplified-shield" ? 1 : 0),
+    };
+  });
+}
+
+function bossVariantName(variant) {
+  if (variant === "amplified-shield") return "증폭 방어막";
+  if (variant === "reinforcement") return "증원 소환";
+  return "변형 없음";
+}
+
+function createRandomSeed() {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return values[0] || 1;
+}
+
+function nextRandom() {
+  state.randomState =
+    (Math.imul(state.randomState, 1664525) + 1013904223) >>> 0;
+  return state.randomState / 4294967296;
+}
+
 function shuffle(values) {
   const copy = [...values];
   for (let index = copy.length - 1; index > 0; index -= 1) {
-    const target = Math.floor(Math.random() * (index + 1));
+    const target = Math.floor(nextRandom() * (index + 1));
     [copy[index], copy[target]] = [copy[target], copy[index]];
   }
   return copy;
@@ -354,48 +433,70 @@ function getNextStepCandidates(path, template) {
   return [...candidates.values()];
 }
 
-function getPlacementVariants(template) {
-  if (placementVariantCache.has(template.id)) {
-    return placementVariantCache.get(template.id);
-  }
+function completedPathAtEndpoint(cell) {
+  if (!cell) return null;
+  return state.completedPaths.find((entry) => {
+    const first = entry.path[0];
+    const last = entry.path[entry.path.length - 1];
+    return sameCell(cell, first) || sameCell(cell, last);
+  }) ?? null;
+}
 
-  const variants = new Map();
-  TRANSFORMS.forEach((transform) => {
-    const transformed = template.points.map(transform);
-    const minX = Math.min(...transformed.map(([x]) => x));
-    const minY = Math.min(...transformed.map(([, y]) => y));
-    const normalized = transformed.map(([x, y]) => [x - minX, y - minY]);
-    const key = [...normalized]
-      .sort(([ax, ay], [bx, by]) => ax - bx || ay - by)
-      .map(([x, y]) => `${x},${y}`)
-      .join("|");
-    if (!variants.has(key)) {
-      variants.set(key, normalized);
+function canUseCorruptionIgnore() {
+  return (
+    hasAbility("corruption-ignore") &&
+    !state.puzzleUses.corruptionIgnore
+  );
+}
+
+function canUseRuneLink() {
+  return hasAbility("rune-link") && !state.puzzleUses.runeLink;
+}
+
+function pathUsesCorruptionIgnore(path) {
+  return path.some(({ row, col }) =>
+    state.corrupted.has(cellKey(row, col)),
+  );
+}
+
+function linkedPathForPath(path) {
+  if (!canUseRuneLink() || path.length === 0) return null;
+  return completedPathAtEndpoint(path[0]);
+}
+
+function isLegalPuzzlePath(path) {
+  const linkedPath = linkedPathForPath(path);
+  let corruptedCount = 0;
+  return path.every(({ row, col }, index) => {
+    const key = cellKey(row, col);
+    if (state.claimed.has(key)) {
+      return index === 0 && Boolean(linkedPath);
     }
+    if (state.corrupted.has(key)) {
+      corruptedCount += 1;
+      return canUseCorruptionIgnore() && corruptedCount <= 1;
+    }
+    return true;
   });
-
-  const result = [...variants.values()];
-  placementVariantCache.set(template.id, result);
-  return result;
 }
 
 function canTemplateFit(template) {
-  return getPlacementVariants(template).some((variant) => {
-    const width = Math.max(...variant.map(([x]) => x)) + 1;
-    const height = Math.max(...variant.map(([, y]) => y)) + 1;
-    for (let top = 0; top <= BOARD_SIZE - height; top += 1) {
-      for (let left = 0; left <= BOARD_SIZE - width; left += 1) {
-        const isFree = variant.every(([x, y]) => {
-          const key = cellKey(top + y, left + x);
-          return !state.claimed.has(key) && !state.corrupted.has(key);
-        });
-        if (isFree) {
-          return true;
-        }
-      }
-    }
-    return false;
-  });
+  return getPathSequences(template).some((sequence) =>
+    Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, index) => ({
+      row: Math.floor(index / BOARD_SIZE),
+      col: index % BOARD_SIZE,
+    })).some((start) => {
+      const path = sequence.map(([x, y]) => ({
+        row: start.row + y,
+        col: start.col + x,
+      }));
+      const inBounds = path.every(
+        ({ row, col }) =>
+          row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE,
+      );
+      return inBounds && isLegalPuzzlePath(path);
+    }),
+  );
 }
 
 function matchesRune(path, template) {
@@ -417,18 +518,82 @@ function chooseRunes() {
     }));
 }
 
+function remainingRunesThatCanHitCell(row, col) {
+  return remainingRunes().filter((template) =>
+    getPathSequences(template).some((sequence) =>
+      Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, index) => ({
+        row: Math.floor(index / BOARD_SIZE),
+        col: index % BOARD_SIZE,
+      })).some((start) => {
+        const path = sequence.map(([x, y]) => ({
+          row: start.row + y,
+          col: start.col + x,
+        }));
+        return (
+          path.some((cell) => cell.row === row && cell.col === col) &&
+          path.every(
+            (cell) =>
+              cell.row >= 0 &&
+              cell.row < BOARD_SIZE &&
+              cell.col >= 0 &&
+              cell.col < BOARD_SIZE,
+          ) &&
+          isLegalPuzzlePath(path)
+        );
+      }),
+    ),
+  ).length;
+}
+
+function canAnyRemainingRuneHitCell(row, col) {
+  return remainingRunesThatCanHitCell(row, col) > 0;
+}
+
 function spawnEnemies() {
-  const amount = Math.min(12, 7 + state.floor);
-  const positions = shuffle(
+  const allPositions = shuffle(
     Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, index) => ({
       row: Math.floor(index / BOARD_SIZE),
       col: index % BOARD_SIZE,
     })),
-  ).slice(0, amount);
+  );
 
-  state.enemies = positions.map((position, index) => ({
+  if (isBossFloor()) {
+    const config = currentBossConfig();
+    const bossPosition =
+      allPositions.find(({ row, col }) =>
+        canAnyRemainingRuneHitCell(row, col),
+      ) ?? allPositions[0];
+    const normalCount = currentStage() === 3 ? 5 : 3;
+    const normalPositions = allPositions
+      .filter((position) => !sameCell(position, bossPosition))
+      .slice(0, normalCount);
+    state.enemies = [
+      {
+        id: `${state.floor}-boss`,
+        kind: "boss",
+        row: bossPosition.row,
+        col: bossPosition.col,
+        shieldCount: config.shieldCount,
+        moveIntent: null,
+        summonRoll: nextRandom(),
+      },
+      ...normalPositions.map((position, index) => ({
+        id: `${state.floor}-enemy-${index}`,
+        kind: "normal",
+        ...position,
+        shieldCount: 0,
+        moveIntent: null,
+      })),
+    ];
+    return;
+  }
+
+  const amount = Math.min(12, 7 + state.floor);
+  state.enemies = allPositions.slice(0, amount).map((position, index) => ({
     id: `${state.floor}-enemy-${index}`,
+    kind: "normal",
     ...position,
+    shieldCount: 0,
     moveIntent: null,
   }));
 }
@@ -438,8 +603,13 @@ function planEnemyMoves() {
     state.enemies.map((enemy) => cellKey(enemy.row, enemy.col)),
   );
   const reserved = new Set();
+  const boss = state.enemies.find((enemy) => enemy.kind === "boss");
+  const actors = [
+    ...(boss ? [boss] : []),
+    ...shuffle(state.enemies.filter((enemy) => enemy.kind !== "boss")),
+  ];
 
-  shuffle(state.enemies).forEach((enemy) => {
+  actors.forEach((enemy) => {
     const candidates = MOVE_DIRECTIONS
       .map(({ rowDelta, colDelta, arrow }) => {
         const row = enemy.row + rowDelta;
@@ -456,15 +626,22 @@ function planEnemyMoves() {
           !state.claimed.has(key) &&
           !state.corrupted.has(key) &&
           !occupied.has(key) &&
-          !reserved.has(key)
+          !reserved.has(key) &&
+          (
+            enemy.kind !== "boss" ||
+            canAnyRemainingRuneHitCell(row, col)
+          )
         );
       });
 
     const destination =
-      candidates[Math.floor(Math.random() * candidates.length)] ?? null;
+      candidates[Math.floor(nextRandom() * candidates.length)] ?? null;
     enemy.moveIntent = destination;
     if (destination) {
       reserved.add(cellKey(destination.row, destination.col));
+    }
+    if (enemy.kind === "boss") {
+      enemy.summonRoll = nextRandom();
     }
   });
 }
@@ -490,7 +667,12 @@ function createStateSnapshot() {
     experience: state.experience,
     level: state.level,
     abilities: [...state.abilities],
-    continuousDefeatUsed: state.continuousDefeatUsed,
+    ricochetUsed: state.ricochetUsed,
+    puzzleUses: { ...state.puzzleUses },
+    pendingAbilityChoices: [...state.pendingAbilityChoices],
+    abilityChoiceLocks: { ...state.abilityChoiceLocks },
+    replacementSerial: state.replacementSerial,
+    randomState: state.randomState,
     pendingLevelUps: state.pendingLevelUps,
     pendingOutcome: state.pendingOutcome,
     running: state.running,
@@ -517,7 +699,12 @@ function restoreStateSnapshot(snapshot) {
   state.experience = snapshot.experience;
   state.level = snapshot.level;
   state.abilities = [...snapshot.abilities];
-  state.continuousDefeatUsed = snapshot.continuousDefeatUsed;
+  state.ricochetUsed = snapshot.ricochetUsed;
+  state.puzzleUses = { ...snapshot.puzzleUses };
+  state.pendingAbilityChoices = [...snapshot.pendingAbilityChoices];
+  state.abilityChoiceLocks = { ...(snapshot.abilityChoiceLocks ?? {}) };
+  state.replacementSerial = snapshot.replacementSerial;
+  state.randomState = snapshot.randomState ?? state.randomState;
   state.pendingLevelUps = snapshot.pendingLevelUps;
   state.pendingOutcome = snapshot.pendingOutcome;
   state.running = snapshot.running;
@@ -525,6 +712,67 @@ function restoreStateSnapshot(snapshot) {
   state.currentPath = [];
   state.drawing = false;
   state.pointerId = null;
+}
+
+function saveRunState() {
+  try {
+    const payload = {
+      version: APP_VERSION,
+      savedAt: Date.now(),
+      floor: state.floor,
+      snapshot: createStateSnapshot(),
+      history: state.history,
+      floorInitialSnapshot: state.floorInitialSnapshot,
+      bossConfigs: state.bossConfigs,
+      floorStartExperience: state.floorStartExperience,
+      floorStartLevel: state.floorStartLevel,
+      floorStartAbilities: state.floorStartAbilities,
+      stageStartExperience: state.stageStartExperience,
+      stageStartLevel: state.stageStartLevel,
+      stageStartAbilities: state.stageStartAbilities,
+      floorStartedAt: state.floorStartedAt,
+      stageStartedAt: state.stageStartedAt,
+      lastFailureReason: state.lastFailureReason,
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn("룬 트레이스 진행 상태를 저장하지 못했습니다.", error);
+  }
+}
+
+function restoreRunState() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const payload = JSON.parse(raw);
+    if (
+      payload?.version !== APP_VERSION ||
+      !payload.snapshot ||
+      !Array.isArray(payload.bossConfigs)
+    ) {
+      return false;
+    }
+    state.floor = payload.floor;
+    restoreStateSnapshot(payload.snapshot);
+    state.history = Array.isArray(payload.history) ? payload.history : [];
+    state.floorInitialSnapshot = payload.floorInitialSnapshot ?? null;
+    state.bossConfigs = payload.bossConfigs;
+    state.floorStartExperience = payload.floorStartExperience ?? 0;
+    state.floorStartLevel = payload.floorStartLevel ?? 1;
+    state.floorStartAbilities = payload.floorStartAbilities ?? [];
+    state.stageStartExperience = payload.stageStartExperience ?? 0;
+    state.stageStartLevel = payload.stageStartLevel ?? 1;
+    state.stageStartAbilities = payload.stageStartAbilities ?? [];
+    state.floorStartedAt = payload.floorStartedAt ?? Date.now();
+    state.stageStartedAt = payload.stageStartedAt ?? state.floorStartedAt;
+    state.lastFailureReason = payload.lastFailureReason ?? null;
+    state.restoredFromSave = true;
+    render();
+    return true;
+  } catch (error) {
+    console.warn("룬 트레이스 진행 상태를 복원하지 못했습니다.", error);
+    return false;
+  }
 }
 
 function startFloor(
@@ -555,7 +803,14 @@ function startFloor(
   state.pointerId = null;
   state.defeated = 0;
   state.directDefeated = 0;
-  state.continuousDefeatUsed = false;
+  state.ricochetUsed = false;
+  state.puzzleUses = {
+    corruptionIgnore: false,
+    runeLink: false,
+    runeReplace: false,
+  };
+  state.pendingAbilityChoices = [];
+  state.replacementSerial = 0;
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
   state.history = [];
@@ -564,7 +819,7 @@ function startFloor(
   spawnEnemies();
   planEnemyMoves();
   state.floorInitialSnapshot = createStateSnapshot();
-  state.floorStartedAt = performance.now();
+  state.floorStartedAt = Date.now();
   if (currentFloorInStage() === 1) {
     state.stageStartedAt = state.floorStartedAt;
   }
@@ -572,7 +827,18 @@ function startFloor(
   render();
   if (logStart) {
     logStageAndFloorStart({ retry: analyticsRetry });
+    if (isBossFloor()) {
+      void logPlayEvent("boss_start", {
+        chapter_id: "chapter_01",
+        stage_index: currentStage(),
+        floor_in_stage: currentFloorInStage(),
+        boss_type: currentBossConfig()?.type ?? "moving-boss",
+        boss_variant: currentBossConfig()?.variant ?? null,
+        shield_count: currentBossConfig()?.shieldCount ?? 0,
+      });
+    }
   }
+  saveRunState();
 }
 
 function undoLastRune() {
@@ -587,6 +853,7 @@ function undoLastRune() {
   state.pendingOutcome = null;
   setFeedback("마지막 룬을 그리기 전 상태로 되돌렸습니다.", "success");
   render();
+  saveRunState();
 }
 
 function resetFloor() {
@@ -606,13 +873,14 @@ function resetFloor() {
   state.lastFailureReason = null;
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
-  state.floorStartedAt = performance.now();
+  state.floorStartedAt = Date.now();
   setFeedback("현재 층을 최초 배치로 초기화했습니다.");
   render();
   void logPlayEvent("floor_start", {
     ...boardLogPayload(),
     retry: true,
   });
+  saveRunState();
 }
 
 function restartChapter() {
@@ -625,11 +893,15 @@ function restartChapter() {
   state.experience = 0;
   state.level = 1;
   state.abilities = [];
+  state.abilityChoiceLocks = {};
+  state.randomState = createRandomSeed();
   state.directDefeated = 0;
-  state.continuousDefeatUsed = false;
+  state.ricochetUsed = false;
+  state.bossConfigs = createBossConfigs();
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
   startFloor(1, { analyticsRetry: true });
+  showBossInfoForCurrentEntry();
 }
 
 function restartStage() {
@@ -646,6 +918,7 @@ function restartStage() {
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
   startFloor(firstFloor, { analyticsRetry: true });
+  showBossInfoForCurrentEntry();
 }
 
 function remainingRunes() {
@@ -698,14 +971,7 @@ function temptationTargets(path, survivors, level) {
   return level >= 3 ? candidates : candidates.slice(0, level);
 }
 
-function continuousDefeatTargets(path, survivors, level, directCount) {
-  if (
-    directCount < 2 ||
-    state.continuousDefeatUsed ||
-    survivors.length < level
-  ) {
-    return [];
-  }
+function ricochetTargets(path, survivors, level) {
   const endpoint = path[path.length - 1];
   return [...survivors]
     .sort((a, b) => {
@@ -740,22 +1006,27 @@ function endpointSlashCells(path, level) {
       col: endpoint.col + colDelta,
     }];
   } else if (level === 2) {
-    if (Math.abs(rowDelta) + Math.abs(colDelta) !== 1) {
-      return [];
-    }
     const center = {
       row: endpoint.row + rowDelta,
       col: endpoint.col + colDelta,
     };
-    cells = rowDelta === 0
-      ? [-1, 0, 1].map((offset) => ({
-          row: center.row + offset,
-          col: center.col,
-        }))
-      : [-1, 0, 1].map((offset) => ({
-          row: center.row,
-          col: center.col + offset,
-        }));
+    if (rowDelta !== 0 && colDelta !== 0) {
+      cells = [
+        { row: endpoint.row + rowDelta, col: endpoint.col },
+        center,
+        { row: endpoint.row, col: endpoint.col + colDelta },
+      ];
+    } else {
+      cells = rowDelta === 0
+        ? [-1, 0, 1].map((offset) => ({
+            row: center.row + offset,
+            col: center.col,
+          }))
+        : [-1, 0, 1].map((offset) => ({
+            row: center.row,
+            col: center.col + offset,
+          }));
+    }
   } else {
     for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
       for (let colOffset = -1; colOffset <= 1; colOffset += 1) {
@@ -776,51 +1047,173 @@ function endpointSlashCells(path, level) {
   );
 }
 
-function combatPreview(path) {
-  const directTargetIds = new Set(
-    state.enemies
-      .filter((enemy) =>
-        path.some((cell) => sameCell(cell, enemy)),
-      )
-      .map((enemy) => enemy.id),
-  );
-  const survivors = state.enemies.filter(
-    (enemy) => !directTargetIds.has(enemy.id),
-  );
-  const extraTargetIds = new Set();
-  const rangeKeys = new Set();
-  const ability = activeStandaloneAbility();
-  let continuousDefeatTriggered = false;
+function summonPreviewCell(actors, pathKeys, boss) {
+  const config = currentBossConfig();
+  if (
+    !boss ||
+    !boss.alive ||
+    config?.variant !== "reinforcement" ||
+    !boss.wasHit
+  ) {
+    return null;
+  }
 
-  if (ability?.id === "temptation") {
-    temptationTargets(path, survivors, ability.level).forEach((enemy) => {
-      extraTargetIds.add(enemy.id);
+  const projected = actors
+    .filter((actor) => actor.alive)
+    .map((actor) => {
+      const destination = actor.moveIntent;
+      const destinationKey = destination
+        ? cellKey(destination.row, destination.col)
+        : null;
+      const canMove =
+        destination &&
+        !pathKeys.has(destinationKey) &&
+        !state.claimed.has(destinationKey) &&
+        !state.corrupted.has(destinationKey);
+      return {
+        id: actor.id,
+        row: canMove ? destination.row : actor.row,
+        col: canMove ? destination.col : actor.col,
+      };
     });
-  } else if (ability?.id === "continuous-defeat") {
-    const targets = continuousDefeatTargets(
-      path,
-      survivors,
-      ability.level,
-      directTargetIds.size,
+  const projectedBoss = projected.find((actor) => actor.id === boss.id);
+  if (!projectedBoss) return null;
+  const occupied = new Set(
+    projected.map((actor) => cellKey(actor.row, actor.col)),
+  );
+  const candidates = MOVE_DIRECTIONS
+    .map(({ rowDelta, colDelta }) => ({
+      row: projectedBoss.row + rowDelta,
+      col: projectedBoss.col + colDelta,
+    }))
+    .filter(({ row, col }) => {
+      const key = cellKey(row, col);
+      return (
+        row >= 0 &&
+        row < BOARD_SIZE &&
+        col >= 0 &&
+        col < BOARD_SIZE &&
+        !pathKeys.has(key) &&
+        !state.claimed.has(key) &&
+        !state.corrupted.has(key) &&
+        !occupied.has(key)
+      );
+    })
+    .sort((a, b) => a.row - b.row || a.col - b.col);
+  if (candidates.length === 0) return null;
+  const index = Math.floor((boss.summonRoll ?? 0) * candidates.length);
+  return candidates[Math.min(index, candidates.length - 1)];
+}
+
+function combatPreview(path) {
+  const actors = state.enemies.map((enemy) => ({
+    ...enemy,
+    moveIntent: enemy.moveIntent ? { ...enemy.moveIntent } : null,
+    alive: true,
+    wasHit: false,
+  }));
+  const actorsById = new Map(actors.map((actor) => [actor.id, actor]));
+  const hitTargetIds = new Set();
+  const directTargetIds = new Set();
+  const extraTargetIds = new Set();
+  const defeatTargetIds = new Set();
+  const shieldBreakTargetIds = new Set();
+  const rangeKeys = new Set();
+  const outcomes = [];
+  const pathKeys = new Set(
+    path.map(({ row, col }) => cellKey(row, col)),
+  );
+
+  function resolveHit(actor, source) {
+    if (!actor?.alive || hitTargetIds.has(actor.id)) return null;
+    hitTargetIds.add(actor.id);
+    actor.wasHit = true;
+    const result = actor.shieldCount > 0 ? "shield" : "kill";
+    if (result === "shield") {
+      actor.shieldCount -= 1;
+      shieldBreakTargetIds.add(actor.id);
+    } else {
+      actor.alive = false;
+      defeatTargetIds.add(actor.id);
+    }
+    if (source === "direct") {
+      directTargetIds.add(actor.id);
+    } else {
+      extraTargetIds.add(actor.id);
+    }
+    const outcome = { id: actor.id, source, result };
+    outcomes.push(outcome);
+    return outcome;
+  }
+
+  path.forEach((cell) => {
+    const actor = actors.find(
+      (entry) => entry.row === cell.row && entry.col === cell.col,
     );
-    targets.forEach((enemy) => extraTargetIds.add(enemy.id));
-    continuousDefeatTriggered = targets.length === ability.level;
-  } else if (ability?.id === "endpoint-slash") {
-    endpointSlashCells(path, ability.level).forEach((cell) => {
-      rangeKeys.add(cellKey(cell.row, cell.col));
-    });
-    survivors.forEach((enemy) => {
-      if (rangeKeys.has(cellKey(enemy.row, enemy.col))) {
-        extraTargetIds.add(enemy.id);
-      }
+    resolveHit(actor, "direct");
+  });
+  const directNormalKills = outcomes.filter(
+    (outcome) =>
+      outcome.source === "direct" &&
+      outcome.result === "kill" &&
+      actorsById.get(outcome.id)?.kind === "normal",
+  ).length;
+
+  const endpointSlashLevel = abilityLevel("endpoint-slash");
+  if (endpointSlashLevel > 0) {
+    endpointSlashCells(path, endpointSlashLevel).forEach((cell) => {
+      const key = cellKey(cell.row, cell.col);
+      rangeKeys.add(key);
+      const actor = actors.find(
+        (entry) =>
+          entry.alive && entry.row === cell.row && entry.col === cell.col,
+      );
+      resolveHit(actor, "endpoint-slash");
     });
   }
 
+  const temptationLevel = abilityLevel("temptation");
+  if (temptationLevel > 0) {
+    temptationTargets(
+      path,
+      actors.filter(
+        (actor) => actor.alive && !hitTargetIds.has(actor.id),
+      ),
+      temptationLevel,
+    ).forEach((actor) => resolveHit(actor, "temptation"));
+  }
+
+  const ricochetLevel = abilityLevel("ricochet");
+  const ricochetTriggered =
+    ricochetLevel > 0 &&
+    !state.ricochetUsed &&
+    directNormalKills >= 2;
+  if (ricochetTriggered) {
+    ricochetTargets(
+      path,
+      actors.filter(
+        (actor) =>
+          actor.kind === "normal" &&
+          actor.alive &&
+          !hitTargetIds.has(actor.id),
+      ),
+      ricochetLevel,
+    ).forEach((actor) => resolveHit(actor, "ricochet"));
+  }
+
+  const boss = actors.find((actor) => actor.kind === "boss");
   return {
+    outcomes,
+    actors,
+    hitTargetIds,
     directTargetIds,
     extraTargetIds,
+    defeatTargetIds,
+    shieldBreakTargetIds,
     rangeKeys,
-    continuousDefeatTriggered,
+    ricochetTriggered,
+    directNormalKills,
+    summonCell: summonPreviewCell(actors, pathKeys, boss),
   };
 }
 
@@ -865,7 +1258,7 @@ function renderStatus() {
   const currentFloorComplete =
     !state.running &&
     state.runes.length > 0 &&
-    remainingRunes().length === 0;
+    !state.lastFailureReason;
   refs.floorContext.textContent = `CHAPTER 01 · STAGE ${stage}`;
   refs.floorDisplay.textContent = `FLOOR ${floor} / ${FLOORS_PER_STAGE}`;
   refs.levelCount.textContent = String(state.level);
@@ -913,7 +1306,9 @@ function renderStatus() {
 
   refs.turnLabel.textContent = "자동 룬 인식";
   refs.boardGoal.textContent =
-    complete < RUNES_PER_FLOOR
+    isBossFloor() && state.enemies.some((enemy) => enemy.kind === "boss")
+      ? `남은 룬 ${RUNES_PER_FLOOR - complete}개로 보스를 처치하세요`
+      : complete < RUNES_PER_FLOOR
       ? `남은 룬 ${RUNES_PER_FLOOR - complete}개 중 하나를 그리세요`
       : "모든 룬 완성";
 }
@@ -928,22 +1323,24 @@ function renderRunControls() {
     return;
   }
 
-  const owned = COMBAT_ABILITIES
+  const owned = ALL_ABILITIES
     .map((ability) => ({
       ...ability,
       level: abilityLevel(ability.id),
     }))
     .filter((ability) => ability.level > 0);
   refs.abilityList.innerHTML = owned
-    .map(
-      (ability) =>
-        `<span>${ability.name} LV.${ability.level}</span>`,
-    )
-    .concat(
-      owned.length > 1
-        ? '<span class="is-on-hold">복합 발동 보류</span>'
-        : [],
-    )
+    .map((ability) => {
+      const useKey = {
+        "corruption-ignore": "corruptionIgnore",
+        "rune-link": "runeLink",
+        "rune-replace": "runeReplace",
+      }[ability.id];
+      const useCopy = useKey
+        ? state.puzzleUses[useKey] ? " · 사용" : " · 대기"
+        : "";
+      return `<span>${ability.name} LV.${ability.level}${useCopy}</span>`;
+    })
     .join("");
 }
 
@@ -960,10 +1357,18 @@ function renderBoard() {
   const preview = completedPreviewRune
     ? combatPreview(state.currentPath)
     : {
+        hitTargetIds: new Set(),
+        defeatTargetIds: new Set(),
+        shieldBreakTargetIds: new Set(),
         directTargetIds: new Set(),
         extraTargetIds: new Set(),
         rangeKeys: new Set(),
+        summonCell: null,
       };
+  const summonKey = preview.summonCell
+    ? cellKey(preview.summonCell.row, preview.summonCell.col)
+    : null;
+  const linkPreview = linkedPathForPath(state.currentPath);
 
   const cells = [];
   for (let row = 0; row < BOARD_SIZE; row += 1) {
@@ -974,14 +1379,28 @@ function renderBoard() {
       if (state.corrupted.has(key)) classes.push("is-corrupted");
       if (currentKeys.has(key)) classes.push("is-current");
       if (preview.rangeKeys.has(key)) classes.push("is-ability-range");
+      if (
+        canUseRuneLink() &&
+        state.claimed.has(key) &&
+        completedPathAtEndpoint({ row, col })
+      ) {
+        classes.push("is-link-endpoint");
+      }
       const enemy = enemiesByCell.get(key);
       const intent = enemy?.moveIntent;
       const enemyClasses = ["enemy"];
-      if (preview.directTargetIds.has(enemy?.id)) {
-        enemyClasses.push("is-defeat-preview", "is-direct-preview");
+      if (enemy?.kind === "boss") enemyClasses.push("is-boss");
+      if (preview.hitTargetIds.has(enemy?.id)) {
+        enemyClasses.push("is-hit-preview");
+      }
+      if (preview.defeatTargetIds.has(enemy?.id)) {
+        enemyClasses.push("is-defeat-preview");
+      }
+      if (preview.shieldBreakTargetIds.has(enemy?.id)) {
+        enemyClasses.push("is-shield-break-preview");
       }
       if (preview.extraTargetIds.has(enemy?.id)) {
-        enemyClasses.push("is-defeat-preview", "is-ability-preview");
+        enemyClasses.push("is-ability-preview");
       }
       cells.push(`
         <div class="${classes.join(" ")}">
@@ -989,18 +1408,27 @@ function renderBoard() {
             enemy
               ? `
                 <span class="${enemyClasses.join(" ")}">
-                  <span class="enemy-mark">◆</span>
-                  <span class="enemy-intent${intent ? "" : " is-stopped"}">
-                    ${
-                      intent
-                        ? intent.arrow
-                        : '<img class="enemy-stop-icon" src="./assets/stop-intent-lock.png" alt="" aria-hidden="true">'
-                    }
-                  </span>
+                  <span class="enemy-mark">${enemy.kind === "boss" ? "♛" : "◆"}</span>
+                  ${
+                    enemy.shieldCount > 0
+                      ? `<span class="enemy-shield" aria-label="방어막 ${enemy.shieldCount}개">◈${enemy.shieldCount}</span>`
+                      : ""
+                  }
+                </span>
+                <span
+                  class="enemy-intent${intent ? "" : " is-stopped"}${enemy.kind === "boss" ? " is-boss-intent" : ""}"
+                  style="--move-x:${intent?.colDelta ?? 0};--move-y:${intent?.rowDelta ?? 0}"
+                >
+                  ${
+                    intent
+                      ? intent.arrow
+                      : '<img class="enemy-stop-icon" src="./assets/stop-intent-lock.png" alt="" aria-hidden="true">'
+                  }
                 </span>
               `
               : ""
           }
+          ${summonKey === key ? '<span class="summon-ghost" aria-label="증원 소환 예정">◆</span>' : ""}
         </div>
       `);
     }
@@ -1011,7 +1439,10 @@ function renderBoard() {
     const points = entry.path
       .map(({ row, col }) => `${col + 0.5},${row + 0.5}`)
       .join(" ");
-    return `<polyline class="completed-path" points="${points}" style="stroke:${entry.color};color:${entry.color}"></polyline>`;
+    const linking = linkPreview?.runeId === entry.runeId
+      ? " is-link-preview"
+      : "";
+    return `<polyline class="completed-path${linking}" points="${points}" style="stroke:${entry.color};color:${entry.color}"></polyline>`;
   });
 
   if (state.currentPath.length > 0) {
@@ -1029,6 +1460,8 @@ function renderBoard() {
 }
 
 function renderRuneChoices() {
+  const canReplace =
+    hasAbility("rune-replace") && !state.puzzleUses.runeReplace;
   refs.runeChoices.innerHTML = state.runes
     .map((rune) => {
       const canFit = rune.complete ? true : canTemplateFit(rune);
@@ -1044,10 +1477,70 @@ function renderRuneChoices() {
           ${miniRuneSvg(rune)}
           <b>${rune.name}</b>
           <small>${status}</small>
+          ${
+            canReplace && !rune.complete
+              ? `<button class="rune-replace-button" type="button" data-rune-id="${rune.instanceId}">교체</button>`
+              : ""
+          }
         </div>
       `;
     })
     .join("");
+}
+
+function replaceRune(instanceId) {
+  if (
+    !hasAbility("rune-replace") ||
+    state.puzzleUses.runeReplace ||
+    !state.running
+  ) {
+    return;
+  }
+  const runeIndex = state.runes.findIndex(
+    (rune) => rune.instanceId === instanceId && !rune.complete,
+  );
+  if (runeIndex < 0) return;
+  const previousRune = state.runes[runeIndex];
+  const candidates = RUNE_TEMPLATES.filter(
+    (template) => template.id !== previousRune.id,
+  );
+  const replacement =
+    candidates[Math.floor(nextRandom() * candidates.length)];
+  state.replacementSerial += 1;
+  const replacementRune = {
+    ...replacement,
+    points: replacement.points.map((point) => [...point]),
+    instanceId:
+      `${state.floor}-${replacement.id}-replacement-${state.replacementSerial}`,
+    color: previousRune.color,
+    complete: false,
+  };
+  state.runes[runeIndex] = replacementRune;
+  state.puzzleUses.runeReplace = true;
+
+  const applyLockedReplacement = (snapshot) => {
+    if (!snapshot) return;
+    const index = snapshot.runes.findIndex(
+      (rune) => rune.instanceId === instanceId,
+    );
+    if (index >= 0) {
+      snapshot.runes[index] = {
+        ...replacementRune,
+        points: replacementRune.points.map((point) => [...point]),
+      };
+    }
+    snapshot.puzzleUses.runeReplace = true;
+    snapshot.replacementSerial = state.replacementSerial;
+    snapshot.randomState = state.randomState;
+  };
+  applyLockedReplacement(state.floorInitialSnapshot);
+  state.history.forEach(applyLockedReplacement);
+  setFeedback(
+    `${previousRune.name}을 ${replacementRune.name}(으)로 교체했습니다.`,
+    "success",
+  );
+  render();
+  saveRunState();
 }
 
 function render() {
@@ -1138,7 +1631,20 @@ function diagonalPriorityCell(event) {
 
 function isBlocked(cell) {
   const key = cellKey(cell.row, cell.col);
-  return state.claimed.has(key) || state.corrupted.has(key);
+  if (state.claimed.has(key)) {
+    return !(
+      state.currentPath.length === 0 &&
+      canUseRuneLink() &&
+      completedPathAtEndpoint(cell)
+    );
+  }
+  if (state.corrupted.has(key)) {
+    const corruptionAlreadyUsed = state.currentPath.some((point) =>
+      state.corrupted.has(cellKey(point.row, point.col)),
+    );
+    return !canUseCorruptionIgnore() || corruptionAlreadyUsed;
+  }
+  return false;
 }
 
 function isAdjacent(a, b) {
@@ -1245,7 +1751,7 @@ function beginDrawing(event) {
   state.drawing = true;
   state.pointerId = event.pointerId;
   state.currentPath = [];
-  state.pathStartedAt = performance.now();
+  state.pathStartedAt = Date.now();
   refs.board.setPointerCapture?.(event.pointerId);
   appendDrawingCell(cell);
 }
@@ -1269,7 +1775,7 @@ function cancelDrawing() {
       intersection_count: state.enemies.filter((enemy) =>
         cancelledPath.some((cell) => sameCell(cell, enemy)),
       ).length,
-      crossed_corruption: false,
+      crossed_corruption: pathUsesCorruptionIgnore(cancelledPath),
       valid: false,
       invalid_reason: "invalid_path",
       invalid_detail: "pointer_cancelled",
@@ -1304,7 +1810,7 @@ function finishDrawing(event) {
       intersection_count: state.enemies.filter((enemy) =>
         state.currentPath.some((cell) => sameCell(cell, enemy)),
       ).length,
-      crossed_corruption: false,
+      crossed_corruption: pathUsesCorruptionIgnore(state.currentPath),
       valid: false,
       invalid_reason: "invalid_path",
       invalid_detail: "rune_not_matched",
@@ -1342,7 +1848,7 @@ function moveEnemies() {
   });
 }
 
-function corruptCells() {
+function corruptCells(reservedKeys = new Set()) {
   const enemyCells = new Set(
     state.enemies.map((enemy) => cellKey(enemy.row, enemy.col)),
   );
@@ -1365,19 +1871,33 @@ function corruptCells() {
           col < BOARD_SIZE &&
           !state.claimed.has(key) &&
           !state.corrupted.has(key) &&
-          !enemyCells.has(key)
+          !enemyCells.has(key) &&
+          !reservedKeys.has(key)
         ) {
           candidates.push(key);
         }
       }
     }
-    const target = candidates[Math.floor(Math.random() * candidates.length)];
+    const target = candidates[Math.floor(nextRandom() * candidates.length)];
     if (target) {
       state.corrupted.add(target);
       corruptedNow += 1;
     }
   }
   return corruptedNow;
+}
+
+function summonReinforcement(cell) {
+  if (!cell) return false;
+  state.enemies.push({
+    id: `${state.floor}-summon-${completedRuneCount()}`,
+    kind: "normal",
+    row: cell.row,
+    col: cell.col,
+    shieldCount: 0,
+    moveIntent: null,
+  });
+  return true;
 }
 
 function grantExperience(amount) {
@@ -1417,7 +1937,11 @@ function resolveQueuedModal() {
 
 function commitRune(rune, path) {
   const preview = combatPreview(path);
-  const activeAbility = activeStandaloneAbility();
+  const crossedCorruption = pathUsesCorruptionIgnore(path);
+  const linkedPath = linkedPathForPath(path);
+  const activeAbilities = ALL_ABILITIES.filter(
+    (ability) => abilityLevel(ability.id) > 0,
+  );
   void logPlayEvent("rune_selected", {
     rune_id: rune.instanceId,
     rune_type: rune.id,
@@ -1429,20 +1953,44 @@ function commitRune(rune, path) {
     path_cell_count: path.length,
     processed_monster_count:
       preview.directTargetIds.size + preview.extraTargetIds.size,
-    direct_defeated: preview.directTargetIds.size,
-    ability_defeated: preview.extraTargetIds.size,
+    direct_defeated: preview.outcomes.filter(
+      (outcome) => outcome.source === "direct" && outcome.result === "kill",
+    ).length,
+    ability_defeated: preview.outcomes.filter(
+      (outcome) => outcome.source !== "direct" && outcome.result === "kill",
+    ).length,
     intersection_count: preview.directTargetIds.size,
-    crossed_corruption: false,
+    crossed_corruption: crossedCorruption,
     valid: true,
     invalid_reason: null,
     input_duration_ms: elapsedSince(state.pathStartedAt),
-    ability_id: activeAbility?.id ?? null,
-    ability_level: activeAbility?.level ?? null,
+    ability_id: activeAbilities.map((ability) => ability.id).join(",") || null,
+    ability_level:
+      activeAbilities.map((ability) => abilityLevel(ability.id)).join(",") ||
+      null,
   });
   state.pathStartedAt = 0;
   state.history.push(createStateSnapshot());
+
+  if (linkedPath) {
+    state.completedPaths = state.completedPaths.filter(
+      (entry) => entry.runeId !== linkedPath.runeId,
+    );
+    linkedPath.path.forEach(({ row, col }) => {
+      state.claimed.delete(cellKey(row, col));
+    });
+    state.puzzleUses.runeLink = true;
+  }
+
   const pathKeys = new Set(path.map(({ row, col }) => cellKey(row, col)));
-  pathKeys.forEach((key) => state.claimed.add(key));
+  pathKeys.forEach((key) => {
+    if (!state.corrupted.has(key)) {
+      state.claimed.add(key);
+    }
+  });
+  if (crossedCorruption) {
+    state.puzzleUses.corruptionIgnore = true;
+  }
   rune.complete = true;
   state.completedPaths.push({
     runeId: rune.instanceId,
@@ -1451,29 +1999,55 @@ function commitRune(rune, path) {
   });
   state.currentPath = [];
 
-  const defeatedIds = new Set([
-    ...preview.directTargetIds,
-    ...preview.extraTargetIds,
-  ]);
-  state.enemies = state.enemies.filter(
-    (enemy) => !defeatedIds.has(enemy.id),
+  const defeatedIds = new Set(
+    preview.outcomes
+      .filter((outcome) => outcome.result === "kill")
+      .map((outcome) => outcome.id),
   );
-  const defeatedNow = preview.directTargetIds.size;
-  const abilityDefeatedNow = preview.extraTargetIds.size;
+  const shieldBreakIds = new Set(
+    preview.outcomes
+      .filter((outcome) => outcome.result === "shield")
+      .map((outcome) => outcome.id),
+  );
+  state.enemies.forEach((enemy) => {
+    if (shieldBreakIds.has(enemy.id)) {
+      enemy.shieldCount = Math.max(0, enemy.shieldCount - 1);
+    }
+  });
+  state.enemies = state.enemies.filter((enemy) => !defeatedIds.has(enemy.id));
+  const defeatedNow = preview.outcomes.filter(
+    (outcome) => outcome.source === "direct" && outcome.result === "kill",
+  ).length;
+  const abilityDefeatedNow = preview.outcomes.filter(
+    (outcome) => outcome.source !== "direct" && outcome.result === "kill",
+  ).length;
   state.defeated += defeatedNow + abilityDefeatedNow;
   state.directDefeated += defeatedNow;
-  if (preview.continuousDefeatTriggered) {
-    state.continuousDefeatUsed = true;
+  if (preview.ricochetTriggered) {
+    state.ricochetUsed = true;
   }
   grantExperience(defeatedNow);
 
-  if (remainingRunes().length === 0) {
+  const bossDefeated =
+    isBossFloor() &&
+    !state.enemies.some((enemy) => enemy.kind === "boss");
+  const normalFloorCleared = !isBossFloor() && state.enemies.length === 0;
+  if (bossDefeated || normalFloorCleared) {
     state.running = false;
     state.pendingOutcome = isChapterFinalFloor()
       ? "chapter-clear"
       : isStageFinalFloor()
         ? "stage-clear"
         : "floor-clear";
+    if (isBossFloor()) {
+      void logPlayEvent("boss_end", {
+        chapter_id: "chapter_01",
+        stage_index: currentStage(),
+        boss_variant: currentBossConfig()?.variant ?? null,
+        success: true,
+        completed_runes: completedRuneCount(),
+      });
+    }
     void logPlayEvent(
       "floor_end",
       floorEndPayload(true),
@@ -1498,12 +2072,87 @@ function commitRune(rune, path) {
       "success",
     );
     render();
+    saveRunState();
     window.setTimeout(resolveQueuedModal, 260);
     return;
   }
 
   moveEnemies();
-  const corruptedNow = corruptCells();
+  const summonKey = preview.summonCell
+    ? new Set([cellKey(preview.summonCell.row, preview.summonCell.col)])
+    : new Set();
+  const corruptedNow = corruptCells(summonKey);
+  const summoned = summonReinforcement(preview.summonCell);
+
+  if (remainingRunes().length === 0) {
+    if (isBossFloor()) {
+      state.running = false;
+      state.lastFailureReason = "boss_survived";
+      state.pendingOutcome = "fail";
+      void logPlayEvent("boss_end", {
+        chapter_id: "chapter_01",
+        stage_index: currentStage(),
+        boss_variant: currentBossConfig()?.variant ?? null,
+        success: false,
+        completed_runes: completedRuneCount(),
+      });
+      void logPlayEvent(
+        "floor_end",
+        floorEndPayload(false, state.lastFailureReason),
+        { flush: true },
+      );
+      void logPlayEvent(
+        "stage_fail",
+        {
+          chapter_id: "chapter_01",
+          stage_index: currentStage(),
+          duration_ms: elapsedSince(state.stageStartedAt),
+          failure_reason: state.lastFailureReason,
+          completed_runes: completedRuneCount(),
+          remaining_runes: [],
+          surviving_enemies: state.enemies.length,
+          corrupted_cell_count: state.corrupted.size,
+        },
+        { flush: true },
+      );
+      setFeedback("네 번째 룬 뒤에도 보스가 생존해 토벌에 실패했습니다.", "alert");
+      render();
+      saveRunState();
+      window.setTimeout(resolveQueuedModal, 260);
+      return;
+    }
+
+    state.running = false;
+    state.pendingOutcome = isChapterFinalFloor()
+      ? "chapter-clear"
+      : isStageFinalFloor()
+        ? "stage-clear"
+        : "floor-clear";
+    void logPlayEvent("floor_end", floorEndPayload(true), { flush: true });
+    if (isStageFinalFloor()) {
+      void logPlayEvent(
+        "stage_clear",
+        {
+          chapter_id: "chapter_01",
+          stage_index: currentStage(),
+          duration_ms: elapsedSince(state.stageStartedAt),
+          final_level: state.level,
+          final_experience: state.experience,
+          total_defeated_on_final_floor: state.defeated,
+        },
+        { flush: true },
+      );
+    }
+    setFeedback(
+      `네 개의 룬이 공명했습니다. 직접 ${defeatedNow}체 · 능력 ${abilityDefeatedNow}체를 처치하고 EXP ${defeatedNow}을 얻었습니다.`,
+      "success",
+    );
+    render();
+    saveRunState();
+    window.setTimeout(resolveQueuedModal, 260);
+    return;
+  }
+
   planEnemyMoves();
 
   const fittingRunes = remainingRunes().filter((entry) => canTemplateFit(entry));
@@ -1511,6 +2160,16 @@ function commitRune(rune, path) {
     state.running = false;
     state.lastFailureReason = "blocked_by_corruption";
     state.pendingOutcome = "fail";
+    if (isBossFloor()) {
+      void logPlayEvent("boss_end", {
+        chapter_id: "chapter_01",
+        stage_index: currentStage(),
+        boss_variant: currentBossConfig()?.variant ?? null,
+        success: false,
+        completed_runes: completedRuneCount(),
+        failure_reason: state.lastFailureReason,
+      });
+    }
     void logPlayEvent(
       "floor_end",
       floorEndPayload(false, state.lastFailureReason),
@@ -1523,7 +2182,7 @@ function commitRune(rune, path) {
         stage_index: currentStage(),
         duration_ms: elapsedSince(state.stageStartedAt),
         failure_reason: state.lastFailureReason,
-        completed_runes: state.completedPaths.length,
+        completed_runes: completedRuneCount(),
         remaining_runes: remainingRunes().map((entry) => entry.id),
         surviving_enemies: state.enemies.length,
         corrupted_cell_count: state.corrupted.size,
@@ -1532,6 +2191,7 @@ function commitRune(rune, path) {
     );
     setFeedback("오염으로 남은 룬을 놓을 공간이 사라졌습니다.", "alert");
     render();
+    saveRunState();
     window.setTimeout(resolveQueuedModal, 260);
     return;
   }
@@ -1541,10 +2201,11 @@ function commitRune(rune, path) {
       ? `직접 ${defeatedNow}체 · 능력 ${abilityDefeatedNow}체 제거 · EXP +${defeatedNow}, `
       : "";
   setFeedback(
-    `${rune.name} 완성! ${killCopy}빈 칸 ${corruptedNow}곳이 오염됐습니다.`,
+    `${rune.name} 완성! ${killCopy}빈 칸 ${corruptedNow}곳이 오염됐습니다.${summoned ? " 증원이 소환됐습니다." : ""}`,
     "success",
   );
   render();
+  saveRunState();
   if (state.pendingLevelUps > 0) {
     window.setTimeout(resolveQueuedModal, 260);
   }
@@ -1598,6 +2259,53 @@ function closeModal() {
   refs.helpButton.focus({ preventScroll: true });
 }
 
+function showBossInfoModal(source = "manual") {
+  const config = currentBossConfig();
+  if (!config) return;
+  void logPlayEvent("boss_info_view", {
+    chapter_id: "chapter_01",
+    stage_index: currentStage(),
+    floor_in_stage: currentFloorInStage(),
+    source,
+    boss_type: config.type,
+    boss_variant: config.variant,
+    shield_count: config.shieldCount,
+  });
+  openModal({
+    type: "boss-info",
+    eyebrow: `STAGE ${currentStage()} · BOSS INFO`,
+    title: "이동형 보스<br>토벌 정보",
+    body: `
+      <div class="boss-info-grid">
+        <div><span>방어막</span><strong>${config.shieldCount}</strong></div>
+        <div><span>필요 타격</span><strong>${config.shieldCount + 1}</strong></div>
+        <div><span>변형</span><strong>${bossVariantName(config.variant)}</strong></div>
+      </div>
+      <p>보스는 일반 몬스터보다 먼저 이동 칸을 예약하며, 남은 룬으로 공격 가능한 칸만 선택합니다. 보스를 처치하면 일반 몬스터가 남아 있어도 즉시 클리어합니다.</p>
+      ${
+        config.variant === "reinforcement"
+          ? "<p><strong>증원 소환:</strong> 보스가 피격 후 생존하면 이동과 오염 처리 뒤 일반 몬스터 1체를 소환합니다. 소환 예정 칸은 룬 확정 전에 표시됩니다.</p>"
+          : "<p><strong>증폭 방어막:</strong> 기본형보다 방어막 1개가 추가됩니다.</p>"
+      }
+    `,
+    actions: [
+      {
+        label: "확인",
+        primary: true,
+        onClick: closeModal,
+      },
+    ],
+  });
+}
+
+function showBossInfoForCurrentEntry() {
+  if (currentFloorInStage() === 1) {
+    showBossInfoModal("stage_entry");
+  } else if (isBossFloor()) {
+    showBossInfoModal("boss_floor_entry");
+  }
+}
+
 function showLevelUpBoard() {
   if (state.modalType !== "levelup") {
     return;
@@ -1619,24 +2327,61 @@ function showLevelUpSelection() {
   window.setTimeout(() => refs.modalPanel.focus(), 0);
 }
 
+function availableAbilityChoices() {
+  return ALL_ABILITIES.filter(
+    (ability) => abilityLevel(ability.id) < ability.maxLevel,
+  );
+}
+
+function ensureAbilityChoices() {
+  const targetLevel = state.level - state.pendingLevelUps + 1;
+  if (state.pendingAbilityChoices.length > 0) {
+    return state.pendingAbilityChoices
+      .map(abilityById)
+      .filter(Boolean);
+  }
+  const lockedChoices = state.abilityChoiceLocks[targetLevel];
+  if (Array.isArray(lockedChoices)) {
+    state.pendingAbilityChoices = [...lockedChoices];
+    return lockedChoices.map(abilityById).filter(Boolean);
+  }
+  const choices = shuffle(availableAbilityChoices()).slice(0, 3);
+  state.pendingAbilityChoices = choices.map((ability) => ability.id);
+  state.abilityChoiceLocks[targetLevel] = [...state.pendingAbilityChoices];
+  const persistLock = (snapshot) => {
+    if (!snapshot) return;
+    snapshot.abilityChoiceLocks = {
+      ...(snapshot.abilityChoiceLocks ?? {}),
+      [targetLevel]: [...state.pendingAbilityChoices],
+    };
+    snapshot.randomState = state.randomState;
+  };
+  persistLock(state.floorInitialSnapshot);
+  state.history.forEach(persistLock);
+  saveRunState();
+  return choices;
+}
+
 function completeLevelUp(abilityId = null) {
   const resolvedLevel = state.level - state.pendingLevelUps + 1;
   const ability = abilityById(abilityId);
   const previousAbilityLevel = ability ? abilityLevel(ability.id) : 0;
-  if (ability && previousAbilityLevel < 3) {
+  if (ability && previousAbilityLevel < ability.maxLevel) {
     state.abilities.push(ability.id);
   }
   state.pendingLevelUps = Math.max(0, state.pendingLevelUps - 1);
+  state.pendingAbilityChoices = [];
   closeModal();
   setFeedback(
     ability
-      ? previousAbilityLevel < 3
+      ? previousAbilityLevel < ability.maxLevel
         ? `LEVEL ${resolvedLevel} · ${ability.name} LV.${previousAbilityLevel + 1}`
         : `LEVEL ${resolvedLevel} · ${ability.name}은 이미 최대 단계입니다.`
-      : `LEVEL ${resolvedLevel} · 능력 선택을 건너뛰었습니다.`,
+      : `LEVEL ${resolvedLevel} · 획득 가능한 능력이 없어 선택을 마쳤습니다.`,
     "success",
   );
   render();
+  saveRunState();
   window.setTimeout(resolveQueuedModal, 0);
 }
 
@@ -1653,6 +2398,16 @@ function requestModalClose() {
       duration_ms: elapsedSince(state.tutorialStartedAt),
     });
     closeModal();
+    if (state.restoredFromSave) {
+      state.restoredFromSave = false;
+      if (state.pendingLevelUps > 0 || state.pendingOutcome) {
+        resolveQueuedModal();
+      } else {
+        showBossInfoForCurrentEntry();
+      }
+    } else {
+      showBossInfoForCurrentEntry();
+    }
     return;
   }
   if (state.modalType === "help") {
@@ -1662,7 +2417,7 @@ function requestModalClose() {
 
 function rulesMarkup() {
   return `
-    <p>적을 전부 쓰러뜨리는 대신, <strong>제시된 룬 네 개를 모두 그리면</strong> 층을 통과합니다.</p>
+    <p>일반 플로어는 <strong>룬 네 개를 완성하거나 적을 전부 처치하면</strong> 통과합니다. 보스 플로어는 네 번째 룬까지 보스를 처치해야 합니다.</p>
       <div class="rule-list">
         <div class="rule"><b>1</b><span>왼쪽 목록의 룬 중 하나를 그리면 자동으로 인식됩니다.</span></div>
         <div class="rule"><b>2</b><span>룬은 회전·좌우 반전 가능하며, 지나간 적을 처치하면 EXP를 얻습니다.</span></div>
@@ -1670,12 +2425,12 @@ function rulesMarkup() {
         <div class="rule"><b>4</b><span>완성 룬과 오염 칸은 다시 쓸 수 없습니다. 네 룬의 자리를 남겨두세요.</span></div>
       </div>
       <p>룬 경로로 직접 처치한 적만 EXP를 주며, 능력 추가 처치는 섬멸 수에만 포함됩니다.</p>
-      <p>한 챕터는 3개 스테이지, 각 스테이지는 3개 플로어입니다. EXP ${EXPERIENCE_PER_LEVEL}마다 레벨이 오릅니다.</p>
+      <p>한 챕터는 3개 스테이지, 각 스테이지는 3개 플로어이며 마지막 플로어에 보스가 등장합니다. EXP ${EXPERIENCE_PER_LEVEL}마다 레벨이 오릅니다.</p>
     `;
 }
 
 function showIntroModal() {
-  state.tutorialStartedAt = performance.now();
+  state.tutorialStartedAt = Date.now();
   void logPlayEvent("tutorial_start", {
     tutorial_version: 1,
   });
@@ -1706,6 +2461,16 @@ function showIntroModal() {
             duration_ms: duration,
           });
           closeModal();
+          if (state.restoredFromSave) {
+            state.restoredFromSave = false;
+            if (state.pendingLevelUps > 0 || state.pendingOutcome) {
+              resolveQueuedModal();
+            } else {
+              showBossInfoForCurrentEntry();
+            }
+          } else {
+            showBossInfoForCurrentEntry();
+          }
         },
       },
     ],
@@ -1747,6 +2512,16 @@ function showPlayLogConsentModal() {
         onClick: async () => {
           await window.RuneTracePlayLog?.setConsent(true);
           startPlayLogSession({ logCurrentStart: true });
+          if (state.restoredFromSave) {
+            void logPlayEvent("state_restore", {
+              restore_scope: "run",
+              stage_index: currentStage(),
+              floor_in_stage: currentFloorInStage(),
+              completed_runes: completedRuneCount(),
+              pending_level_ups: state.pendingLevelUps,
+              pending_outcome: state.pendingOutcome,
+            });
+          }
           showIntroModal();
         },
       },
@@ -1772,18 +2547,20 @@ function showHelpModal() {
 
 function showLevelUpModal() {
   const targetLevel = state.level - state.pendingLevelUps + 1;
-  const ownedKinds = COMBAT_ABILITIES.filter(
-    (ability) => abilityLevel(ability.id) > 0,
-  ).length;
+  const choices = ensureAbilityChoices();
+  if (choices.length === 0) {
+    completeLevelUp();
+    return;
+  }
   openModal({
     type: "levelup",
     eyebrow: `LEVEL ${targetLevel} REACHED`,
     title: "능력을 하나<br>선택하세요",
     body: `
-      <p>같은 능력을 다시 선택하면 최대 3단계까지 강화됩니다. 서로 다른 능력을 함께 보유하면 복합 발동은 현재 보류됩니다.</p>
+      <p>획득하거나 강화할 수 있는 능력 중 최대 3개가 같은 확률로 제시됩니다. 최대 단계 능력은 나오지 않습니다.</p>
       <div class="level-preview">
         <span>현재 레벨</span>
-        <strong>LV ${targetLevel}${ownedKinds > 1 ? " · 복합 보류" : ""}</strong>
+        <strong>LV ${targetLevel}</strong>
       </div>
     `,
     actions: [
@@ -1792,15 +2569,13 @@ function showLevelUpModal() {
         onClick: showLevelUpBoard,
         className: "review-board-action",
       },
-      ...COMBAT_ABILITIES.map((ability) => {
+      ...choices.map((ability) => {
         const currentLevel = abilityLevel(ability.id);
         return {
           label: `${ability.name} · ${
-            currentLevel >= 3
-              ? "MAX"
-              : currentLevel === 0
-                ? "획득"
-                : `LV.${currentLevel} → LV.${currentLevel + 1}`
+            currentLevel === 0
+              ? "획득"
+              : `LV.${currentLevel} → LV.${currentLevel + 1}`
           }`,
           onClick: () => completeLevelUp(ability.id),
           className: `ability-action ability-${ability.id}`,
@@ -1811,8 +2586,13 @@ function showLevelUpModal() {
 }
 
 function floorResultMarkup() {
+  const resultCopy = isBossFloor()
+    ? "보스를 쓰러뜨려 남은 일반 몬스터와 관계없이 관문을 돌파했습니다."
+    : completedRuneCount() < RUNES_PER_FLOOR
+      ? "일반 몬스터를 모두 쓰러뜨려 남은 룬과 관계없이 층을 통과했습니다."
+      : "적을 모두 쓰러뜨리지 않아도 네 개의 궤적이 탑의 문을 열었습니다.";
   return `
-    <p>적을 모두 쓰러뜨리지 않아도 네 개의 궤적이 탑의 문을 열었습니다.</p>
+    <p>${resultCopy}</p>
     <div class="result-grid">
       <div><span>처치</span><strong>${state.defeated}</strong></div>
       <div><span>획득 EXP</span><strong>+${state.directDefeated}</strong></div>
@@ -1841,6 +2621,7 @@ function showFloorClearModal() {
         onClick: () => {
           closeModal();
           startFloor(state.floor + 1);
+          showBossInfoForCurrentEntry();
         },
       },
     ],
@@ -1870,6 +2651,7 @@ function showStageClearModal() {
         onClick: () => {
           closeModal();
           startFloor(state.floor + 1);
+          showBossInfoForCurrentEntry();
         },
       },
     ],
@@ -1912,6 +2694,14 @@ function showFailModal() {
         restartStage();
       },
     });
+  } else if (isChapterFinalFloor()) {
+    actions.push({
+      label: "챕터 재도전",
+      onClick: () => {
+        closeModal();
+        restartChapter();
+      },
+    });
   }
   actions.push({
     label: "플로어 초기화",
@@ -1925,11 +2715,18 @@ function showFailModal() {
   openModal({
     type: "fail",
     eyebrow: "RUNE SPACE LOST",
-    title: "그릴 공간이<br>사라졌습니다",
+    title:
+      state.lastFailureReason === "boss_survived"
+        ? "보스가 마지막 룬을<br>버텨냈습니다"
+        : "그릴 공간이<br>사라졌습니다",
     body: `
-      <p>살아남은 적의 오염이 남은 룬 경로를 막았습니다. 룬으로 적을 더 많이 베거나, 완성 경로의 위치를 바꿔보세요.</p>
+      <p>${
+        state.lastFailureReason === "boss_survived"
+          ? "네 번째 룬까지 보스의 방어막과 본체를 모두 타격하지 못했습니다."
+          : "살아남은 적의 오염이 남은 룬 경로를 막았습니다. 룬으로 적을 더 많이 베거나, 완성 경로의 위치를 바꿔보세요."
+      }</p>
       <div class="result-grid">
-        <div><span>완성 룬</span><strong>${state.completedPaths.length}</strong></div>
+        <div><span>완성 룬</span><strong>${completedRuneCount()}</strong></div>
         <div><span>획득 EXP</span><strong>+${state.directDefeated}</strong></div>
         <div><span>오염 칸</span><strong>${state.corrupted.size}</strong></div>
       </div>
@@ -1945,6 +2742,12 @@ refs.board.addEventListener("pointercancel", cancelDrawing);
 refs.board.addEventListener("lostpointercapture", () => {
   if (state.drawing) cancelDrawing();
 });
+refs.runeChoices.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-rune-id]");
+  if (!button) return;
+  event.stopPropagation();
+  replaceRune(button.dataset.runeId);
+});
 
 refs.undoButton.addEventListener("click", undoLastRune);
 refs.resetButton.addEventListener("click", resetFloor);
@@ -1954,6 +2757,13 @@ refs.helpButton.addEventListener("click", () => {
     return;
   }
   showHelpModal();
+});
+refs.bossInfoButton?.addEventListener("click", () => {
+  if (state.modalType === "levelup") {
+    showLevelUpSelection();
+    return;
+  }
+  showBossInfoModal("manual");
 });
 refs.modalClose.addEventListener("click", requestModalClose);
 refs.levelUpResumeButton.addEventListener("click", showLevelUpSelection);
@@ -1977,13 +2787,31 @@ window.RuneTracePlayLog?.init({
   getContext: playLogContext,
 });
 
+const restoredRun = restoreRunState();
+if (!restoredRun) {
+  state.randomState = createRandomSeed();
+  state.bossConfigs = createBossConfigs();
+}
 const storedPlayLogConsent = window.RuneTracePlayLog?.getConsent();
 if (storedPlayLogConsent === "granted") {
   startPlayLogSession();
-  startFloor(1);
+  if (restoredRun) {
+    void logPlayEvent("state_restore", {
+      restore_scope: "run",
+      stage_index: currentStage(),
+      floor_in_stage: currentFloorInStage(),
+      completed_runes: completedRuneCount(),
+      pending_level_ups: state.pendingLevelUps,
+      pending_outcome: state.pendingOutcome,
+    });
+  } else {
+    startFloor(1);
+  }
   showIntroModal();
 } else {
-  startFloor(1, { logStart: false });
+  if (!restoredRun) {
+    startFloor(1, { logStart: false });
+  }
   if (storedPlayLogConsent === "declined") {
     showIntroModal();
   } else {

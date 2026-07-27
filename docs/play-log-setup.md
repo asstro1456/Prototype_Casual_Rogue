@@ -22,7 +22,7 @@
 
 ```text
 activeEnvironment: production
-testGroup: external_prototype_v0.0.9
+testGroup: external_prototype_v0.1.0
 ```
 
 ### 게임 배포
@@ -84,7 +84,7 @@ await RuneTracePlayLog.flush()
 - 진행: `stage_start`, `floor_start`, `floor_end`, `stage_clear`, `stage_fail`, `retry`, `stage_quit`
 - 룬: `rune_selected`, `path_result`
 
-현재 프로토타입에 기능이 없는 `boss_*`, `tool_*`, `ad_*`, `state_restore`는 거짓 이벤트를 만들지 않는다. 해당 기능이 구현될 때 `RuneTracePlayLog.log()` 호출을 연결한다.
+현재 구현된 보스 정보·전투·종료와 진행 복원은 `boss_start`, `boss_info_view`, `boss_end`, `state_restore`로 기록한다. 아직 기능이 없는 `tool_*`, `ad_*`는 거짓 이벤트를 만들지 않는다.
 
 ## 개인정보와 운영 주의
 
