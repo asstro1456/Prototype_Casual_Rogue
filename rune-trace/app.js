@@ -6,6 +6,8 @@ const STAGES_PER_CHAPTER = 3;
 const FLOORS_PER_STAGE = 3;
 const TOTAL_FLOORS_PER_CHAPTER = STAGES_PER_CHAPTER * FLOORS_PER_STAGE;
 const EXPERIENCE_PER_LEVEL = 7;
+const MAX_CORRUPTION_SOURCES_PER_TURN = 2;
+const MAX_MONSTER_CORRUPTION_PER_FLOOR = 6;
 const SAVE_KEY = "rune-trace.run-state.v1";
 const ALL_ABILITIES = [
   {
@@ -170,6 +172,7 @@ const state = {
   abilityChoiceLocks: {},
   replacementSerial: 0,
   randomState: Date.now() >>> 0,
+  monsterCorruptionCreated: 0,
   floorStartExperience: 0,
   floorStartLevel: 1,
   floorStartAbilities: [],
@@ -182,6 +185,7 @@ const state = {
   floorInitialSnapshot: null,
   running: true,
   modalType: "intro",
+  modalDismissAction: null,
   levelUpReviewingBoard: false,
   floorStartedAt: 0,
   stageStartedAt: 0,
@@ -286,6 +290,7 @@ function floorEndPayload(success, failureReason = null) {
     ability_defeated: state.defeated - state.directDefeated,
     surviving_enemies: state.enemies.length,
     corrupted_cell_count: state.corrupted.size,
+    monster_corruption_created: state.monsterCorruptionCreated,
     level: state.level,
     experience: state.experience,
   };
@@ -464,10 +469,79 @@ function linkedPathForPath(path) {
   return completedPathAtEndpoint(path[0]);
 }
 
+function crossProduct(a, b, c) {
+  return (
+    (b.col - a.col) * (c.row - a.row) -
+    (b.row - a.row) * (c.col - a.col)
+  );
+}
+
+function pointOnSegment(point, start, end) {
+  return (
+    crossProduct(start, end, point) === 0 &&
+    point.row >= Math.min(start.row, end.row) &&
+    point.row <= Math.max(start.row, end.row) &&
+    point.col >= Math.min(start.col, end.col) &&
+    point.col <= Math.max(start.col, end.col)
+  );
+}
+
+function segmentsIntersect(a, b, c, d) {
+  const abC = crossProduct(a, b, c);
+  const abD = crossProduct(a, b, d);
+  const cdA = crossProduct(c, d, a);
+  const cdB = crossProduct(c, d, b);
+  if (
+    ((abC > 0 && abD < 0) || (abC < 0 && abD > 0)) &&
+    ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0))
+  ) {
+    return true;
+  }
+  return (
+    pointOnSegment(c, a, b) ||
+    pointOnSegment(d, a, b) ||
+    pointOnSegment(a, c, d) ||
+    pointOnSegment(b, c, d)
+  );
+}
+
+function pathCrossesCompletedTrace(path) {
+  if (path.length < 2) return false;
+  const linkedPath = linkedPathForPath(path);
+  const sharedStart = linkedPath ? path[0] : null;
+  for (let pathIndex = 1; pathIndex < path.length; pathIndex += 1) {
+    const newStart = path[pathIndex - 1];
+    const newEnd = path[pathIndex];
+    for (const completed of state.completedPaths) {
+      for (
+        let completedIndex = 1;
+        completedIndex < completed.path.length;
+        completedIndex += 1
+      ) {
+        const oldStart = completed.path[completedIndex - 1];
+        const oldEnd = completed.path[completedIndex];
+        if (!segmentsIntersect(newStart, newEnd, oldStart, oldEnd)) {
+          continue;
+        }
+        const allowedLinkedEndpoint =
+          completed.runeId === linkedPath?.runeId &&
+          pathIndex === 1 &&
+          sameCell(newStart, sharedStart) &&
+          (sameCell(oldStart, sharedStart) ||
+            sameCell(oldEnd, sharedStart));
+        if (!allowedLinkedEndpoint) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 function isLegalPuzzlePath(path) {
   const linkedPath = linkedPathForPath(path);
   let corruptedCount = 0;
-  return path.every(({ row, col }, index) => {
+  const cellsAreLegal = path.every(({ row, col }, index) => {
     const key = cellKey(row, col);
     if (state.claimed.has(key)) {
       return index === 0 && Boolean(linkedPath);
@@ -478,6 +552,7 @@ function isLegalPuzzlePath(path) {
     }
     return true;
   });
+  return cellsAreLegal && !pathCrossesCompletedTrace(path);
 }
 
 function canTemplateFit(template) {
@@ -576,6 +651,7 @@ function spawnEnemies() {
         shieldCount: config.shieldCount,
         moveIntent: null,
         summonRoll: nextRandom(),
+        corruptionPlanned: false,
       },
       ...normalPositions.map((position, index) => ({
         id: `${state.floor}-enemy-${index}`,
@@ -583,6 +659,7 @@ function spawnEnemies() {
         ...position,
         shieldCount: 0,
         moveIntent: null,
+        corruptionPlanned: false,
       })),
     ];
     return;
@@ -595,7 +672,33 @@ function spawnEnemies() {
     ...position,
     shieldCount: 0,
     moveIntent: null,
+    corruptionPlanned: false,
   }));
+}
+
+function planCorruptionSources() {
+  state.enemies.forEach((enemy) => {
+    enemy.corruptionPlanned = false;
+  });
+  const remainingBudget = Math.max(
+    0,
+    MAX_MONSTER_CORRUPTION_PER_FLOOR -
+      state.monsterCorruptionCreated,
+  );
+  if (remainingBudget === 0) return;
+  const eligible = state.enemies.filter(
+    (enemy) => enemy.kind === "normal" && enemy.moveIntent,
+  );
+  const sourceCount = Math.min(
+    MAX_CORRUPTION_SOURCES_PER_TURN,
+    eligible.length,
+    remainingBudget,
+  );
+  shuffle(eligible)
+    .slice(0, sourceCount)
+    .forEach((enemy) => {
+      enemy.corruptionPlanned = true;
+    });
 }
 
 function planEnemyMoves() {
@@ -644,6 +747,7 @@ function planEnemyMoves() {
       enemy.summonRoll = nextRandom();
     }
   });
+  planCorruptionSources();
 }
 
 function createStateSnapshot() {
@@ -673,6 +777,7 @@ function createStateSnapshot() {
     abilityChoiceLocks: { ...state.abilityChoiceLocks },
     replacementSerial: state.replacementSerial,
     randomState: state.randomState,
+    monsterCorruptionCreated: state.monsterCorruptionCreated,
     pendingLevelUps: state.pendingLevelUps,
     pendingOutcome: state.pendingOutcome,
     running: state.running,
@@ -693,6 +798,7 @@ function restoreStateSnapshot(snapshot) {
   state.enemies = snapshot.enemies.map((enemy) => ({
     ...enemy,
     moveIntent: enemy.moveIntent ? { ...enemy.moveIntent } : null,
+    corruptionPlanned: Boolean(enemy.corruptionPlanned),
   }));
   state.defeated = snapshot.defeated;
   state.directDefeated = snapshot.directDefeated;
@@ -705,6 +811,11 @@ function restoreStateSnapshot(snapshot) {
   state.abilityChoiceLocks = { ...(snapshot.abilityChoiceLocks ?? {}) };
   state.replacementSerial = snapshot.replacementSerial;
   state.randomState = snapshot.randomState ?? state.randomState;
+  state.monsterCorruptionCreated =
+    snapshot.monsterCorruptionCreated ?? 0;
+  if (snapshot.monsterCorruptionCreated === undefined) {
+    planCorruptionSources();
+  }
   state.pendingLevelUps = snapshot.pendingLevelUps;
   state.pendingOutcome = snapshot.pendingOutcome;
   state.running = snapshot.running;
@@ -811,6 +922,7 @@ function startFloor(
   };
   state.pendingAbilityChoices = [];
   state.replacementSerial = 0;
+  state.monsterCorruptionCreated = 0;
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
   state.history = [];
@@ -1105,6 +1217,56 @@ function summonPreviewCell(actors, pathKeys, boss) {
   return candidates[Math.min(index, candidates.length - 1)];
 }
 
+function corruptionPreview(actors, pathKeys, summonCell) {
+  const projectedById = new Map();
+  actors
+    .filter((actor) => actor.alive)
+    .forEach((actor) => {
+      const destination = actor.moveIntent;
+      const destinationKey = destination
+        ? cellKey(destination.row, destination.col)
+        : null;
+      const canMove =
+        destination &&
+        !pathKeys.has(destinationKey) &&
+        !state.claimed.has(destinationKey) &&
+        !state.corrupted.has(destinationKey);
+      projectedById.set(actor.id, {
+        row: canMove ? destination.row : actor.row,
+        col: canMove ? destination.col : actor.col,
+        moved: Boolean(canMove),
+      });
+    });
+  const occupied = new Set(
+    [...projectedById.values()].map(({ row, col }) => cellKey(row, col)),
+  );
+  const summonKey = summonCell
+    ? cellKey(summonCell.row, summonCell.col)
+    : null;
+  const willCorruptIds = new Set();
+  const cancelledCorruptionIds = new Set();
+
+  actors
+    .filter((actor) => actor.corruptionPlanned)
+    .forEach((actor) => {
+      const projected = projectedById.get(actor.id);
+      const originKey = cellKey(actor.row, actor.col);
+      const willCorrupt =
+        actor.alive &&
+        projected?.moved &&
+        !pathKeys.has(originKey) &&
+        !state.claimed.has(originKey) &&
+        !state.corrupted.has(originKey) &&
+        !occupied.has(originKey) &&
+        originKey !== summonKey;
+      (willCorrupt ? willCorruptIds : cancelledCorruptionIds).add(
+        actor.id,
+      );
+    });
+
+  return { willCorruptIds, cancelledCorruptionIds };
+}
+
 function combatPreview(path) {
   const actors = state.enemies.map((enemy) => ({
     ...enemy,
@@ -1202,6 +1364,8 @@ function combatPreview(path) {
   }
 
   const boss = actors.find((actor) => actor.kind === "boss");
+  const summonCell = summonPreviewCell(actors, pathKeys, boss);
+  const corruption = corruptionPreview(actors, pathKeys, summonCell);
   return {
     outcomes,
     actors,
@@ -1213,7 +1377,8 @@ function combatPreview(path) {
     rangeKeys,
     ricochetTriggered,
     directNormalKills,
-    summonCell: summonPreviewCell(actors, pathKeys, boss),
+    summonCell,
+    ...corruption,
   };
 }
 
@@ -1364,6 +1529,8 @@ function renderBoard() {
         extraTargetIds: new Set(),
         rangeKeys: new Set(),
         summonCell: null,
+        willCorruptIds: new Set(),
+        cancelledCorruptionIds: new Set(),
       };
   const summonKey = preview.summonCell
     ? cellKey(preview.summonCell.row, preview.summonCell.col)
@@ -1388,8 +1555,19 @@ function renderBoard() {
       }
       const enemy = enemiesByCell.get(key);
       const intent = enemy?.moveIntent;
+      const corruptionCancelled =
+        preview.cancelledCorruptionIds.has(enemy?.id);
+      if (enemy?.corruptionPlanned) {
+        classes.push("is-corruption-preview");
+      }
+      if (corruptionCancelled) {
+        classes.push("is-corruption-cancelled");
+      }
       const enemyClasses = ["enemy"];
       if (enemy?.kind === "boss") enemyClasses.push("is-boss");
+      if (enemy?.corruptionPlanned) {
+        enemyClasses.push("is-corruption-source");
+      }
       if (preview.hitTargetIds.has(enemy?.id)) {
         enemyClasses.push("is-hit-preview");
       }
@@ -1410,13 +1588,18 @@ function renderBoard() {
                 <span class="${enemyClasses.join(" ")}">
                   <span class="enemy-mark">${enemy.kind === "boss" ? "♛" : "◆"}</span>
                   ${
+                    enemy.corruptionPlanned
+                      ? '<span class="enemy-corruption-icon" aria-label="이동 후 현재 칸 오염 예정">✦</span>'
+                      : ""
+                  }
+                  ${
                     enemy.shieldCount > 0
                       ? `<span class="enemy-shield" aria-label="방어막 ${enemy.shieldCount}개">◈${enemy.shieldCount}</span>`
                       : ""
                   }
                 </span>
                 <span
-                  class="enemy-intent${intent ? "" : " is-stopped"}${enemy.kind === "boss" ? " is-boss-intent" : ""}"
+                  class="enemy-intent${intent ? "" : " is-stopped"}${enemy.kind === "boss" ? " is-boss-intent" : ""}${enemy.corruptionPlanned && preview.defeatTargetIds.has(enemy.id) ? " is-defeat-preview" : ""}"
                   style="--move-x:${intent?.colDelta ?? 0};--move-y:${intent?.rowDelta ?? 0}"
                 >
                   ${
@@ -1426,6 +1609,11 @@ function renderBoard() {
                   }
                 </span>
               `
+              : ""
+          }
+          ${
+            enemy?.corruptionPlanned
+              ? `<span class="corruption-cell-preview${corruptionCancelled ? " is-cancelled" : ""}" aria-label="이동 후 오염 예정 칸"></span>`
               : ""
           }
           ${summonKey === key ? '<span class="summon-ghost" aria-label="증원 소환 예정">◆</span>' : ""}
@@ -1685,6 +1873,13 @@ function appendDrawingCell(cell) {
   if (path.some((point) => sameCell(point, cell))) {
     return;
   }
+  if (pathCrossesCompletedTrace([...path, cell])) {
+    setFeedback(
+      "기존 룬 궤적을 가로질러 통과할 수 없습니다.",
+      "alert",
+    );
+    return;
+  }
 
   const candidateRunes = candidateRunesForPath(path);
   const maxLength = Math.max(
@@ -1827,9 +2022,12 @@ function finishDrawing(event) {
 }
 
 function moveEnemies() {
+  const movements = new Map();
   state.enemies.forEach((enemy) => {
+    const origin = { row: enemy.row, col: enemy.col };
     const destination = enemy.moveIntent;
     if (!destination) {
+      movements.set(enemy.id, { origin, moved: false });
       return;
     }
 
@@ -1839,50 +2037,53 @@ function moveEnemies() {
       state.corrupted.has(destinationKey)
     ) {
       enemy.moveIntent = null;
+      movements.set(enemy.id, { origin, moved: false });
       return;
     }
 
     enemy.row = destination.row;
     enemy.col = destination.col;
     enemy.moveIntent = null;
+    movements.set(enemy.id, {
+      origin,
+      destination: { row: enemy.row, col: enemy.col },
+      moved: true,
+    });
   });
+  return movements;
 }
 
-function corruptCells(reservedKeys = new Set()) {
-  const enemyCells = new Set(
+function corruptCells(movements, reservedKeys = new Set()) {
+  const occupied = new Set(
     state.enemies.map((enemy) => cellKey(enemy.row, enemy.col)),
   );
-  const budget = Math.min(3, 1 + Math.ceil(state.enemies.length / 4));
   let corruptedNow = 0;
 
-  for (const enemy of shuffle(state.enemies)) {
-    if (corruptedNow >= budget) break;
-    const candidates = [];
-    for (let rowDelta = -1; rowDelta <= 1; rowDelta += 1) {
-      for (let colDelta = -1; colDelta <= 1; colDelta += 1) {
-        if (rowDelta === 0 && colDelta === 0) continue;
-        const row = enemy.row + rowDelta;
-        const col = enemy.col + colDelta;
-        const key = cellKey(row, col);
-        if (
-          row >= 0 &&
-          row < BOARD_SIZE &&
-          col >= 0 &&
-          col < BOARD_SIZE &&
-          !state.claimed.has(key) &&
-          !state.corrupted.has(key) &&
-          !enemyCells.has(key) &&
-          !reservedKeys.has(key)
-        ) {
-          candidates.push(key);
-        }
-      }
+  for (const enemy of state.enemies) {
+    if (
+      !enemy.corruptionPlanned ||
+      state.monsterCorruptionCreated >=
+        MAX_MONSTER_CORRUPTION_PER_FLOOR
+    ) {
+      continue;
     }
-    const target = candidates[Math.floor(nextRandom() * candidates.length)];
-    if (target) {
-      state.corrupted.add(target);
-      corruptedNow += 1;
+    const movement = movements.get(enemy.id);
+    if (!movement?.moved) continue;
+    const originKey = cellKey(
+      movement.origin.row,
+      movement.origin.col,
+    );
+    if (
+      state.claimed.has(originKey) ||
+      state.corrupted.has(originKey) ||
+      occupied.has(originKey) ||
+      reservedKeys.has(originKey)
+    ) {
+      continue;
     }
+    state.corrupted.add(originKey);
+    state.monsterCorruptionCreated += 1;
+    corruptedNow += 1;
   }
   return corruptedNow;
 }
@@ -1896,6 +2097,7 @@ function summonReinforcement(cell) {
     col: cell.col,
     shieldCount: 0,
     moveIntent: null,
+    corruptionPlanned: false,
   });
   return true;
 }
@@ -2077,11 +2279,11 @@ function commitRune(rune, path) {
     return;
   }
 
-  moveEnemies();
+  const movements = moveEnemies();
   const summonKey = preview.summonCell
     ? new Set([cellKey(preview.summonCell.row, preview.summonCell.col)])
     : new Set();
-  const corruptedNow = corruptCells(summonKey);
+  const corruptedNow = corruptCells(movements, summonKey);
   const summoned = summonReinforcement(preview.summonCell);
 
   if (remainingRunes().length === 0) {
@@ -2201,7 +2403,7 @@ function commitRune(rune, path) {
       ? `직접 ${defeatedNow}체 · 능력 ${abilityDefeatedNow}체 제거 · EXP +${defeatedNow}, `
       : "";
   setFeedback(
-    `${rune.name} 완성! ${killCopy}빈 칸 ${corruptedNow}곳이 오염됐습니다.${summoned ? " 증원이 소환됐습니다." : ""}`,
+    `${rune.name} 완성! ${killCopy}예고된 오염 ${corruptedNow}곳 발생 · 누적 ${state.monsterCorruptionCreated}/${MAX_MONSTER_CORRUPTION_PER_FLOOR}.${summoned ? " 증원이 소환됐습니다." : ""}`,
     "success",
   );
   render();
@@ -2221,8 +2423,16 @@ function makeAction(label, onClick, primary = false, className = "") {
   return button;
 }
 
-function openModal({ type, eyebrow, title, body, actions }) {
+function openModal({
+  type,
+  eyebrow,
+  title,
+  body,
+  actions,
+  onDismiss = null,
+}) {
   state.modalType = type;
+  state.modalDismissAction = onDismiss;
   refs.modalPanel.dataset.modalType = type;
   refs.modalEyebrow.textContent = eyebrow;
   refs.modalTitle.innerHTML = title;
@@ -2253,6 +2463,7 @@ function closeModal() {
   refs.modalBackdrop.classList.remove("is-open");
   refs.modalPanel.dataset.modalType = "";
   state.modalType = null;
+  state.modalDismissAction = null;
   state.levelUpReviewingBoard = false;
   refs.levelUpResumeButton.hidden = true;
   refs.modalClose.hidden = false;
@@ -2335,17 +2546,25 @@ function availableAbilityChoices() {
 
 function ensureAbilityChoices() {
   const targetLevel = state.level - state.pendingLevelUps + 1;
-  if (state.pendingAbilityChoices.length > 0) {
-    return state.pendingAbilityChoices
-      .map(abilityById)
-      .filter(Boolean);
+  const available = availableAbilityChoices();
+  const availableIds = new Set(available.map((ability) => ability.id));
+  const pendingChoices = state.pendingAbilityChoices.filter((abilityId) =>
+    availableIds.has(abilityId),
+  );
+  if (pendingChoices.length > 0) {
+    state.pendingAbilityChoices = pendingChoices;
+    return pendingChoices.map(abilityById).filter(Boolean);
   }
   const lockedChoices = state.abilityChoiceLocks[targetLevel];
-  if (Array.isArray(lockedChoices)) {
-    state.pendingAbilityChoices = [...lockedChoices];
-    return lockedChoices.map(abilityById).filter(Boolean);
+  const validLockedChoices = Array.isArray(lockedChoices)
+    ? lockedChoices.filter((abilityId) => availableIds.has(abilityId))
+    : [];
+  if (validLockedChoices.length > 0 || available.length === 0) {
+    state.pendingAbilityChoices = [...validLockedChoices];
+    return validLockedChoices.map(abilityById).filter(Boolean);
   }
-  const choices = shuffle(availableAbilityChoices()).slice(0, 3);
+  delete state.abilityChoiceLocks[targetLevel];
+  const choices = shuffle(available).slice(0, 3);
   state.pendingAbilityChoices = choices.map((ability) => ability.id);
   state.abilityChoiceLocks[targetLevel] = [...state.pendingAbilityChoices];
   const persistLock = (snapshot) => {
@@ -2390,6 +2609,15 @@ function requestModalClose() {
     showLevelUpBoard();
     return;
   }
+  if (state.modalType === "consent") {
+    return;
+  }
+  if (state.modalDismissAction) {
+    const dismissAction = state.modalDismissAction;
+    state.modalDismissAction = null;
+    dismissAction();
+    return;
+  }
   if (state.modalType === "intro") {
     void logPlayEvent("tutorial_quit", {
       tutorial_version: 1,
@@ -2412,7 +2640,9 @@ function requestModalClose() {
   }
   if (state.modalType === "help") {
     closeModal();
+    return;
   }
+  closeModal();
 }
 
 function rulesMarkup() {
@@ -2421,8 +2651,8 @@ function rulesMarkup() {
       <div class="rule-list">
         <div class="rule"><b>1</b><span>왼쪽 목록의 룬 중 하나를 그리면 자동으로 인식됩니다.</span></div>
         <div class="rule"><b>2</b><span>룬은 회전·좌우 반전 가능하며, 지나간 적을 처치하면 EXP를 얻습니다.</span></div>
-        <div class="rule"><b>3</b><span>몬스터 안의 화살표는 다음 이동 방향이며, 자물쇠는 정지를 뜻합니다.</span></div>
-        <div class="rule"><b>4</b><span>완성 룬과 오염 칸은 다시 쓸 수 없습니다. 네 룬의 자리를 남겨두세요.</span></div>
+        <div class="rule"><b>3</b><span>화살표는 다음 이동이며, 보라색 표식이 있는 일반 몬스터는 떠난 칸을 오염시킵니다.</span></div>
+        <div class="rule"><b>4</b><span>완성 룬·오염 칸은 다시 쓸 수 없고 기존 룬 선도 가로지를 수 없습니다.</span></div>
       </div>
       <p>룬 경로로 직접 처치한 적만 EXP를 주며, 능력 추가 처치는 섬멸 수에만 포함됩니다.</p>
       <p>한 챕터는 3개 스테이지, 각 스테이지는 3개 플로어이며 마지막 플로어에 보스가 등장합니다. EXP ${EXPERIENCE_PER_LEVEL}마다 레벨이 오릅니다.</p>
@@ -2558,6 +2788,18 @@ function showLevelUpModal() {
     title: "능력을 하나<br>선택하세요",
     body: `
       <p>획득하거나 강화할 수 있는 능력 중 최대 3개가 같은 확률로 제시됩니다. 최대 단계 능력은 나오지 않습니다.</p>
+      <div class="level-choice-list">
+        ${choices
+          .map(
+            (ability) => `
+              <div>
+                <strong>${ability.name}</strong>
+                <span>${ability.description}</span>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
       <div class="level-preview">
         <span>현재 레벨</span>
         <strong>LV ${targetLevel}</strong>
@@ -2607,6 +2849,11 @@ function showFloorClearModal() {
     eyebrow: "FLOOR CLEAR",
     title: "룬이 공명했습니다",
     body: floorResultMarkup(),
+    onDismiss: () => {
+      closeModal();
+      startFloor(state.floor + 1);
+      showBossInfoForCurrentEntry();
+    },
     actions: [
       {
         label: "이 층 다시",
@@ -2637,6 +2884,11 @@ function showStageClearModal() {
       ${floorResultMarkup()}
       <p>현재 성장 상태를 유지한 채 다음 스테이지로 이어집니다.</p>
     `,
+    onDismiss: () => {
+      closeModal();
+      startFloor(state.floor + 1);
+      showBossInfoForCurrentEntry();
+    },
     actions: [
       {
         label: "스테이지 재도전",
@@ -2731,6 +2983,10 @@ function showFailModal() {
         <div><span>오염 칸</span><strong>${state.corrupted.size}</strong></div>
       </div>
     `,
+    onDismiss: () => {
+      closeModal();
+      resetFloor();
+    },
     actions,
   });
 }
@@ -2768,8 +3024,11 @@ refs.bossInfoButton?.addEventListener("click", () => {
 refs.modalClose.addEventListener("click", requestModalClose);
 refs.levelUpResumeButton.addEventListener("click", showLevelUpSelection);
 refs.modalBackdrop.addEventListener("click", (event) => {
-  if (event.target === refs.modalBackdrop && state.modalType === "levelup") {
-    showLevelUpBoard();
+  if (
+    event.target === refs.modalBackdrop &&
+    state.modalType !== "consent"
+  ) {
+    requestModalClose();
   }
 });
 document.addEventListener("keydown", (event) => {

@@ -496,6 +496,26 @@ body {
   transform: rotate(45deg);
 }
 
+.corruption-cell-preview {
+  position: absolute;
+  inset: 5px;
+  z-index: 1;
+  border: 1px dashed rgba(215, 135, 242, .82);
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(177, 89, 204, .18) 0 4px,
+      rgba(177, 89, 204, .04) 4px 8px
+    );
+  box-shadow: inset 0 0 12px rgba(187, 95, 216, .16);
+  pointer-events: none;
+}
+
+.corruption-cell-preview.is-cancelled {
+  opacity: .2;
+}
+
 .grid-cell.is-ability-range::after {
   position: absolute;
   inset: 3px;
@@ -546,6 +566,13 @@ body {
     0 0 16px rgba(255, 172, 91, .48);
 }
 
+.enemy.is-corruption-source {
+  box-shadow:
+    0 0 0 2px rgba(210, 128, 235, .5),
+    0 5px 12px rgba(1, 6, 19, .42),
+    0 0 15px rgba(197, 98, 224, .46);
+}
+
 .enemy::before,
 .enemy::after {
   position: absolute;
@@ -580,6 +607,22 @@ body {
   line-height: 1.2;
   background: rgba(15, 55, 92, .94);
   box-shadow: 0 0 8px rgba(94, 203, 255, .55);
+}
+
+.enemy-corruption-icon {
+  position: absolute;
+  top: -25%;
+  left: -23%;
+  display: grid;
+  width: 42%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(241, 185, 255, .88);
+  border-radius: 50%;
+  place-items: center;
+  color: #f0c3ff;
+  font-size: clamp(7px, 1.8vw, 10px);
+  background: rgba(87, 35, 108, .94);
+  box-shadow: 0 0 9px rgba(218, 119, 243, .7);
 }
 
 .enemy::before {
@@ -625,6 +668,10 @@ body {
   color: #ffe7a6;
   font-size: clamp(16px, 3.7vw, 22px);
   text-shadow: 0 0 8px rgba(191, 93, 226, .9);
+}
+
+.enemy-intent.is-defeat-preview {
+  opacity: .24;
 }
 
 .enemy-stop-icon {
@@ -1130,6 +1177,32 @@ body {
   border: 1px solid rgba(128, 220, 255, .16);
   border-radius: 14px;
   background: rgba(8, 24, 45, .5);
+}
+
+.level-choice-list {
+  display: grid;
+  gap: 7px;
+  margin: 15px 0;
+}
+
+.level-choice-list div {
+  display: grid;
+  gap: 2px;
+  padding: 9px 11px;
+  border: 1px solid rgba(119, 219, 255, .14);
+  border-radius: 11px;
+  background: rgba(8, 24, 45, .42);
+}
+
+.level-choice-list strong {
+  color: #bdefff;
+  font-size: 11px;
+}
+
+.level-choice-list span {
+  color: #7f96ad;
+  font-size: 9px;
+  line-height: 1.45;
 }
 
 .level-preview span {
