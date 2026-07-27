@@ -1,4 +1,4 @@
-const APP_VERSION = "0.2.2";
+const APP_VERSION = "0.2.3";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -9,7 +9,7 @@ const EXPERIENCE_PER_LEVEL = 7;
 const MAX_CORRUPTION_SOURCES_PER_TURN = 2;
 const MAX_MONSTER_CORRUPTION_PER_FLOOR = 6;
 const SAVE_KEY = "rune-trace.run-state.v1";
-const COMPATIBLE_SAVE_VERSIONS = new Set(["0.2.1", APP_VERSION]);
+const COMPATIBLE_SAVE_VERSIONS = new Set(["0.2.1", "0.2.2", APP_VERSION]);
 const TOOLS = [
   {
     id: "exploration-lens",
@@ -190,6 +190,49 @@ const refs = {
   modalActions: document.querySelector("#modalActions"),
   levelUpResumeButton: document.querySelector("#levelUpResumeButton"),
 };
+
+const WORKSPACE_WIDTH = 1260;
+const WORKSPACE_VIEWPORT_MARGIN = 24;
+let workspaceFitPending = false;
+
+function fitWorkspaceToViewport() {
+  const workspaceHeight = Math.max(
+    1,
+    Math.ceil(refs.gameCard.scrollHeight || refs.gameCard.offsetHeight),
+  );
+  const viewportWidth = Number(window.innerWidth) || WORKSPACE_WIDTH;
+  const viewportHeight = Number(window.innerHeight) || workspaceHeight;
+  const availableWidth = Math.max(
+    1,
+    viewportWidth - WORKSPACE_VIEWPORT_MARGIN,
+  );
+  const availableHeight = Math.max(
+    1,
+    viewportHeight - WORKSPACE_VIEWPORT_MARGIN,
+  );
+  const scale = Math.min(
+    1,
+    availableWidth / WORKSPACE_WIDTH,
+    availableHeight / workspaceHeight,
+  );
+
+  refs.appShell.style.setProperty("--workspace-height", `${workspaceHeight}px`);
+  refs.appShell.style.setProperty("--workspace-scale", scale.toFixed(4));
+}
+
+function scheduleWorkspaceFit() {
+  if (workspaceFitPending) return;
+  workspaceFitPending = true;
+  const applyFit = () => {
+    workspaceFitPending = false;
+    fitWorkspaceToViewport();
+  };
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(applyFit);
+  } else {
+    applyFit();
+  }
+}
 
 const state = {
   floor: 1,
@@ -1780,6 +1823,7 @@ function renderRunControls() {
 function setQaPanel(open) {
   state.qaOpen = Boolean(open);
   renderRunControls();
+  scheduleWorkspaceFit();
   if (state.qaOpen) {
     window.setTimeout(() => refs.qaCloseButton.focus(), 0);
   } else {
@@ -2154,6 +2198,7 @@ function render() {
   renderBoard();
   renderRuneChoices();
   renderRunControls();
+  scheduleWorkspaceFit();
 }
 
 function setFeedback(message, tone = "") {
@@ -3640,6 +3685,14 @@ document.addEventListener("keydown", (event) => {
     requestModalClose();
   }
 });
+
+window.addEventListener?.("resize", scheduleWorkspaceFit);
+if (typeof window.ResizeObserver === "function") {
+  const workspaceResizeObserver = new window.ResizeObserver(
+    scheduleWorkspaceFit,
+  );
+  workspaceResizeObserver.observe(refs.gameCard);
+}
 
 document.querySelectorAll("[data-app-version]").forEach((label) => {
   label.textContent = `v${APP_VERSION}${label.classList.contains("modal-version") ? ` · ${APP_VERSION_NAME}` : ""}`;
