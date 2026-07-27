@@ -3,7 +3,8 @@
 - 스키마 버전: `1`
 - 게임 버전: 이벤트 발생 시 현재 `APP_VERSION`
 - 시간 형식: UTC ISO 8601
-- 원본 저장 위치: Google Sheet `Events`
+- 압축 원본 저장 위치: Google Sheet `Raw_Batches`
+- 과거 원본 위치: Google Sheet `Events`
 
 ## 공통 필드
 
@@ -83,3 +84,14 @@
 - `ad_offer`, `ad_start`, `ad_complete`, `ad_fail`, `ad_exit`
 
 기능 구현 시 표시 이름 대신 고정 ID를 payload에 기록하고 `RuneTracePlayLog.log()`로 연결한다.
+
+## 서버 저장 형식
+
+이벤트 스키마 버전은 `1`을 유지하되 서버 저장 형식은 `event_batch_v1`을 사용한다.
+
+- 같은 참가자·세션·버전·스테이지·플로어 문맥의 이벤트를 한 행에 묶는다.
+- `events_json`에는 각 이벤트의 `event_id`, `event_name`, `client_time_utc`, `payload`를 보존한다.
+- 셀 크기 상한에 가까워지면 같은 문맥이어도 여러 행으로 나눈다.
+- 클라이언트에는 묶음 안에서 저장된 개별 `event_id`를 승인 응답으로 돌려준다.
+- `Session_Index`의 세션별 ID 청크로 재전송 중복을 제거한다.
+- 차트와 대시보드는 압축 JSON을 직접 계산하지 않고 `Participants`, `Sessions`, `Floor_Attempts`, `Dashboard_Data`를 사용한다.

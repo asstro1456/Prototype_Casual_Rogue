@@ -1,4 +1,4 @@
-const APP_VERSION = "0.1.0";
+const APP_VERSION = "0.2.0";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -9,10 +9,28 @@ const EXPERIENCE_PER_LEVEL = 7;
 const MAX_CORRUPTION_SOURCES_PER_TURN = 2;
 const MAX_MONSTER_CORRUPTION_PER_FLOOR = 6;
 const SAVE_KEY = "rune-trace.run-state.v1";
+const TOOLS = [
+  {
+    id: "exploration-lens",
+    name: "탐색 렌즈",
+    icon: "◉",
+  },
+  {
+    id: "cross-seal",
+    name: "교차 인장",
+    icon: "✣",
+  },
+  {
+    id: "purification-tool",
+    name: "정화 도구",
+    icon: "✦",
+  },
+];
 const ALL_ABILITIES = [
   {
     id: "temptation",
     name: "유혹",
+    icon: "◎",
     category: "combat",
     maxLevel: 3,
     description: "새 룬에 이동이 막힌 적을 유인해 추가 피격",
@@ -20,6 +38,7 @@ const ALL_ABILITIES = [
   {
     id: "ricochet",
     name: "도탄",
+    icon: "↝",
     category: "combat",
     maxLevel: 3,
     description: "직접 2체 이상 처치 시 가까운 일반 적을 추가 피격",
@@ -27,6 +46,7 @@ const ALL_ABILITIES = [
   {
     id: "endpoint-slash",
     name: "끝점 참격",
+    icon: "⌁",
     category: "combat",
     maxLevel: 3,
     description: "룬 끝점의 진행 방향에 추가 공격 범위 생성",
@@ -34,6 +54,7 @@ const ALL_ABILITIES = [
   {
     id: "corruption-ignore",
     name: "오염 무시",
+    icon: "◇",
     category: "puzzle",
     maxLevel: 1,
     description: "플로어당 한 번 오염 칸 1개를 경로로 통과",
@@ -41,6 +62,7 @@ const ALL_ABILITIES = [
   {
     id: "rune-link",
     name: "룬 연결",
+    icon: "∞",
     category: "puzzle",
     maxLevel: 1,
     description: "기존 흔적 끝점에서 새 룬을 이어 이전 흔적 제거",
@@ -48,6 +70,7 @@ const ALL_ABILITIES = [
   {
     id: "rune-replace",
     name: "룬 교체",
+    icon: "↻",
     category: "puzzle",
     maxLevel: 1,
     description: "플로어당 한 번 남은 룬을 다른 기본 형태로 교체",
@@ -123,6 +146,7 @@ const refs = {
   enemyCount: document.querySelector("#enemyCount"),
   experienceCount: document.querySelector("#experienceCount"),
   safeCount: document.querySelector("#safeCount"),
+  bossEffectBanner: document.querySelector("#bossEffectBanner"),
   turnLabel: document.querySelector("#turnLabel"),
   boardGoal: document.querySelector("#boardGoal"),
   board: document.querySelector("#runeBoard"),
@@ -133,7 +157,13 @@ const refs = {
   feedback: document.querySelector("#feedbackText"),
   undoButton: document.querySelector("#undoButton"),
   resetButton: document.querySelector("#resetButton"),
+  undoReason: document.querySelector("#undoReason"),
+  resetReason: document.querySelector("#resetReason"),
   abilityList: document.querySelector("#abilityList"),
+  toolSlots: document.querySelector("#toolSlots"),
+  qaMenuButton: document.querySelector("#qaMenuButton"),
+  qaPanel: document.querySelector("#qaPanel"),
+  qaCloseButton: document.querySelector("#qaCloseButton"),
   helpButton: document.querySelector("#helpButton"),
   bossInfoButton: document.querySelector("#bossInfoButton"),
   modalBackdrop: document.querySelector("#modalBackdrop"),
@@ -167,6 +197,8 @@ const state = {
     runeLink: false,
     runeReplace: false,
   },
+  toolInventory: Object.fromEntries(TOOLS.map((tool) => [tool.id, 0])),
+  selectedToolId: null,
   bossConfigs: [],
   pendingAbilityChoices: [],
   abilityChoiceLocks: {},
@@ -193,6 +225,7 @@ const state = {
   tutorialStartedAt: 0,
   lastFailureReason: null,
   restoredFromSave: false,
+  qaOpen: false,
 };
 
 const pathVariantCache = new Map();
@@ -212,6 +245,45 @@ function abilityLevel(abilityId) {
 
 function hasAbility(abilityId) {
   return abilityLevel(abilityId) > 0;
+}
+
+function abilityEffectText(abilityId, level) {
+  if (abilityId === "temptation") {
+    return level >= 3
+      ? "새 룬에 이동이 막힌 모든 대상에게 추가 타격"
+      : `새 룬에 이동이 막힌 대상 최대 ${level}체에게 추가 타격`;
+  }
+  if (abilityId === "ricochet") {
+    return `일반 몬스터 2체 이상 직접 처치 시 끝점과 가까운 일반 몬스터 최대 ${level}체에게 추가 타격`;
+  }
+  if (abilityId === "endpoint-slash") {
+    return [
+      "",
+      "룬 끝점 진행 방향의 다음 1칸을 추가 공격",
+      "룬 끝점 진행 방향의 3칸 너비를 추가 공격",
+      "룬 끝점 주변을 넓게 추가 공격",
+    ][level] ?? "룬 끝점 진행 방향에 추가 공격 범위 생성";
+  }
+  return abilityById(abilityId)?.description ?? "";
+}
+
+function abilityUsageState(ability) {
+  if (ability.id === "ricochet") {
+    return state.ricochetUsed
+      ? { label: "이번 플로어 사용 완료", used: true }
+      : { label: "이번 플로어 발동 가능", used: false };
+  }
+  const useKey = {
+    "corruption-ignore": "corruptionIgnore",
+    "rune-link": "runeLink",
+    "rune-replace": "runeReplace",
+  }[ability.id];
+  if (useKey) {
+    return state.puzzleUses[useKey]
+      ? { label: "이번 플로어 사용 완료", used: true }
+      : { label: "이번 플로어 사용 가능", used: false };
+  }
+  return { label: "조건 충족 시 자동 발동", used: false };
 }
 
 function currentStage() {
@@ -333,6 +405,16 @@ function bossVariantName(variant) {
   if (variant === "amplified-shield") return "증폭 방어막";
   if (variant === "reinforcement") return "증원 소환";
   return "변형 없음";
+}
+
+function bossVariantEffect(variant) {
+  if (variant === "amplified-shield") {
+    return "기본형보다 방어막 1개 추가";
+  }
+  if (variant === "reinforcement") {
+    return "피격 후 생존 시 일반 몬스터 1체 소환";
+  }
+  return "추가 효과 없음";
 }
 
 function createRandomSeed() {
@@ -773,6 +855,8 @@ function createStateSnapshot() {
     abilities: [...state.abilities],
     ricochetUsed: state.ricochetUsed,
     puzzleUses: { ...state.puzzleUses },
+    toolInventory: { ...state.toolInventory },
+    selectedToolId: state.selectedToolId,
     pendingAbilityChoices: [...state.pendingAbilityChoices],
     abilityChoiceLocks: { ...state.abilityChoiceLocks },
     replacementSerial: state.replacementSerial,
@@ -807,6 +891,15 @@ function restoreStateSnapshot(snapshot) {
   state.abilities = [...snapshot.abilities];
   state.ricochetUsed = snapshot.ricochetUsed;
   state.puzzleUses = { ...snapshot.puzzleUses };
+  state.toolInventory = {
+    ...Object.fromEntries(TOOLS.map((tool) => [tool.id, 0])),
+    ...(snapshot.toolInventory ?? {}),
+  };
+  state.selectedToolId =
+    snapshot.selectedToolId &&
+    state.toolInventory[snapshot.selectedToolId] > 0
+      ? snapshot.selectedToolId
+      : null;
   state.pendingAbilityChoices = [...snapshot.pendingAbilityChoices];
   state.abilityChoiceLocks = { ...(snapshot.abilityChoiceLocks ?? {}) };
   state.replacementSerial = snapshot.replacementSerial;
@@ -920,6 +1013,7 @@ function startFloor(
     runeLink: false,
     runeReplace: false,
   };
+  state.selectedToolId = null;
   state.pendingAbilityChoices = [];
   state.replacementSerial = 0;
   state.monsterCorruptionCreated = 0;
@@ -954,6 +1048,10 @@ function startFloor(
 }
 
 function undoLastRune() {
+  if (state.pendingLevelUps > 0) {
+    setFeedback("능력 선택을 완료한 뒤 되돌릴 수 있습니다.", "alert");
+    return;
+  }
   const snapshot = state.history.pop();
   if (!snapshot) {
     setFeedback("되돌릴 완성 룬이 없습니다.", "alert");
@@ -961,14 +1059,16 @@ function undoLastRune() {
   }
   restoreStateSnapshot(snapshot);
   state.running = true;
-  state.pendingLevelUps = 0;
-  state.pendingOutcome = null;
   setFeedback("마지막 룬을 그리기 전 상태로 되돌렸습니다.", "success");
   render();
   saveRunState();
 }
 
 function resetFloor() {
+  if (state.pendingLevelUps > 0) {
+    setFeedback("능력 선택을 완료한 뒤 층을 초기화할 수 있습니다.", "alert");
+    return;
+  }
   if (!state.floorInitialSnapshot) {
     return;
   }
@@ -983,8 +1083,6 @@ function resetFloor() {
   state.history = [];
   state.running = true;
   state.lastFailureReason = null;
-  state.pendingLevelUps = 0;
-  state.pendingOutcome = null;
   state.floorStartedAt = Date.now();
   setFeedback("현재 층을 최초 배치로 초기화했습니다.");
   render();
@@ -1432,6 +1530,10 @@ function renderStatus() {
   refs.safeCount.textContent = String(
     BOARD_SIZE * BOARD_SIZE - state.claimed.size - state.corrupted.size,
   );
+  const bossConfig = currentBossConfig();
+  refs.bossEffectBanner.innerHTML = bossConfig
+    ? `<strong>${bossVariantName(bossConfig.variant)}</strong>${bossVariantEffect(bossConfig.variant)}`
+    : "<strong>보스 변형 없음</strong>추가 효과 없음";
   refs.completeCount.textContent = `${complete} / ${RUNES_PER_FLOOR}`;
   refs.runeProgress.innerHTML = Array.from(
     { length: RUNES_PER_FLOOR },
@@ -1479,34 +1581,113 @@ function renderStatus() {
 }
 
 function renderRunControls() {
-  const levelUpPending = state.modalType === "levelup";
+  const levelUpPending = state.pendingLevelUps > 0;
   refs.undoButton.disabled = levelUpPending || state.history.length === 0;
   refs.resetButton.disabled = levelUpPending || !state.floorInitialSnapshot;
+  refs.undoButton.title = levelUpPending
+    ? "능력 선택을 먼저 완료해야 합니다."
+    : state.history.length === 0
+      ? "직전 룬 행동 기록이 없습니다."
+      : "직전 룬 행동 이전 상태를 복원합니다.";
+  refs.resetButton.title = levelUpPending
+    ? "능력 선택을 먼저 완료해야 합니다."
+    : !state.floorInitialSnapshot
+      ? "플로어 최초 상태가 없습니다."
+      : "현재 플로어 최초 진입 상태를 복원합니다.";
+  refs.undoReason.textContent = refs.undoButton.title;
+  refs.resetReason.textContent = refs.resetButton.title;
+  refs.qaMenuButton.setAttribute("aria-expanded", String(state.qaOpen));
+  refs.qaPanel.setAttribute("aria-hidden", String(!state.qaOpen));
+  refs.qaPanel.classList.toggle("is-open", state.qaOpen);
 
   if (state.abilities.length === 0) {
-    refs.abilityList.textContent = "획득 능력 없음";
-    return;
+    refs.abilityList.innerHTML = "<small>획득 능력 없음</small>";
+  } else {
+    const owned = ALL_ABILITIES
+      .map((ability) => ({
+        ...ability,
+        level: abilityLevel(ability.id),
+      }))
+      .filter((ability) => ability.level > 0);
+    refs.abilityList.innerHTML = owned
+      .map((ability) => {
+        const usage = abilityUsageState(ability);
+        const mode = ability.category === "combat" ? "AUTO" : "USE";
+        return `
+          <button
+            class="ability-icon-button${ability.category === "puzzle" ? " is-puzzle" : ""}"
+            type="button"
+            data-ability-id="${ability.id}"
+            aria-label="${ability.name} 상세 보기, 레벨 ${ability.level}, ${usage.label}"
+            title="${ability.name} · ${usage.label}"
+          >
+            <span class="ability-icon" aria-hidden="true">${ability.icon}</span>
+            <span class="ability-level">LV.${ability.level}</span>
+            <span class="ability-mode">${mode}</span>
+            <i class="ability-use-state${usage.used ? " is-used" : ""}" aria-hidden="true"></i>
+          </button>
+        `;
+      })
+      .join("");
   }
 
-  const owned = ALL_ABILITIES
-    .map((ability) => ({
-      ...ability,
-      level: abilityLevel(ability.id),
-    }))
-    .filter((ability) => ability.level > 0);
-  refs.abilityList.innerHTML = owned
-    .map((ability) => {
-      const useKey = {
-        "corruption-ignore": "corruptionIgnore",
-        "rune-link": "runeLink",
-        "rune-replace": "runeReplace",
-      }[ability.id];
-      const useCopy = useKey
-        ? state.puzzleUses[useKey] ? " · 사용" : " · 대기"
-        : "";
-      return `<span>${ability.name} LV.${ability.level}${useCopy}</span>`;
-    })
-    .join("");
+  refs.toolSlots.innerHTML = TOOLS.map((tool) => {
+    const count = state.toolInventory[tool.id] ?? 0;
+    const selected = state.selectedToolId === tool.id && count > 0;
+    return `
+      <button
+        class="tool-slot${selected ? " is-selected" : ""}"
+        type="button"
+        data-tool-id="${tool.id}"
+        aria-pressed="${selected}"
+        aria-label="${tool.name}, ${count}개 보유"
+        ${count <= 0 || levelUpPending ? "disabled" : ""}
+      >
+        <span class="tool-icon" aria-hidden="true">${tool.icon}</span>
+        <span class="tool-name">${tool.name}</span>
+        <span class="tool-count">${count}</span>
+      </button>
+    `;
+  }).join("");
+}
+
+function setQaPanel(open) {
+  state.qaOpen = Boolean(open);
+  renderRunControls();
+  if (state.qaOpen) {
+    window.setTimeout(() => refs.qaCloseButton.focus(), 0);
+  } else {
+    refs.qaMenuButton.focus({ preventScroll: true });
+  }
+}
+
+function selectTool(toolId) {
+  if (state.pendingLevelUps > 0) {
+    showLevelUpSelection();
+    return;
+  }
+  if ((state.toolInventory[toolId] ?? 0) <= 0) return;
+  state.selectedToolId =
+    state.selectedToolId === toolId ? null : toolId;
+  renderRunControls();
+}
+
+function consumeTool(toolId) {
+  const count = state.toolInventory[toolId] ?? 0;
+  if (count <= 0) return false;
+  state.toolInventory[toolId] = count - 1;
+  if (state.selectedToolId === toolId) {
+    state.selectedToolId = null;
+  }
+  saveRunState();
+  renderRunControls();
+  const button = refs.toolSlots.querySelector(`[data-tool-id="${toolId}"]`);
+  button?.classList.add("is-consuming");
+  window.setTimeout(
+    () => button?.classList.remove("is-consuming"),
+    220,
+  );
+  return true;
 }
 
 function renderBoard() {
@@ -1565,6 +1746,9 @@ function renderBoard() {
       }
       const enemyClasses = ["enemy"];
       if (enemy?.kind === "boss") enemyClasses.push("is-boss");
+      if (enemy?.kind === "boss" && enemy.shieldCount > 0) {
+        enemyClasses.push("has-shield");
+      }
       if (enemy?.corruptionPlanned) {
         enemyClasses.push("is-corruption-source");
       }
@@ -1586,6 +1770,11 @@ function renderBoard() {
             enemy
               ? `
                 <span class="${enemyClasses.join(" ")}">
+                  ${
+                    enemy.kind === "boss" && enemy.shieldCount > 0
+                      ? '<span class="boss-shield-overlay" aria-hidden="true"></span>'
+                      : ""
+                  }
                   <span class="enemy-mark">${enemy.kind === "boss" ? "♛" : "◆"}</span>
                   ${
                     enemy.corruptionPlanned
@@ -1599,7 +1788,7 @@ function renderBoard() {
                   }
                 </span>
                 <span
-                  class="enemy-intent${intent ? "" : " is-stopped"}${enemy.kind === "boss" ? " is-boss-intent" : ""}${enemy.corruptionPlanned && preview.defeatTargetIds.has(enemy.id) ? " is-defeat-preview" : ""}"
+                  class="enemy-intent${intent ? "" : " is-stopped"}${enemy.kind === "boss" ? " is-boss-intent" : ""}${preview.defeatTargetIds.has(enemy.id) ? " is-defeat-preview" : ""}"
                   style="--move-x:${intent?.colDelta ?? 0};--move-y:${intent?.rowDelta ?? 0}"
                 >
                   ${
@@ -2452,7 +2641,12 @@ function openModal({
     "aria-label",
     type === "levelup" ? "보드 보기" : "모달 닫기",
   );
-  refs.modalClose.hidden = !["intro", "help", "levelup"].includes(type);
+  refs.modalClose.hidden = ![
+    "intro",
+    "help",
+    "levelup",
+    "ability-detail",
+  ].includes(type);
   state.levelUpReviewingBoard = false;
   refs.levelUpResumeButton.hidden = true;
   refs.modalBackdrop.classList.add("is-open");
@@ -2468,6 +2662,40 @@ function closeModal() {
   refs.levelUpResumeButton.hidden = true;
   refs.modalClose.hidden = false;
   refs.helpButton.focus({ preventScroll: true });
+}
+
+function showAbilityDetail(abilityId) {
+  if (state.pendingLevelUps > 0) {
+    showLevelUpSelection();
+    return;
+  }
+  const ability = abilityById(abilityId);
+  const level = abilityLevel(abilityId);
+  if (!ability || level <= 0) return;
+  const usage = abilityUsageState(ability);
+  const category =
+    ability.category === "combat" ? "전투 능력 · 자동 발동" : "퍼즐 능력 · 사용형";
+  openModal({
+    type: "ability-detail",
+    eyebrow: category.toUpperCase(),
+    title: `${ability.icon} ${ability.name}`,
+    body: `
+      <div class="result-grid">
+        <div><span>분류</span><strong>${ability.category === "combat" ? "전투" : "퍼즐"}</strong></div>
+        <div><span>현재 단계</span><strong>LV.${level}</strong></div>
+        <div><span>플로어 상태</span><strong>${usage.used ? "사용 완료" : ability.category === "combat" ? "자동 대기" : "사용 가능"}</strong></div>
+      </div>
+      <p><strong>현재 효과</strong><br>${abilityEffectText(ability.id, level)}</p>
+      <p>${usage.label}</p>
+    `,
+    actions: [
+      {
+        label: "닫기",
+        primary: true,
+        onClick: closeModal,
+      },
+    ],
+  });
 }
 
 function showBossInfoModal(source = "manual") {
@@ -2791,12 +3019,16 @@ function showLevelUpModal() {
       <div class="level-choice-list">
         ${choices
           .map(
-            (ability) => `
-              <div>
-                <strong>${ability.name}</strong>
-                <span>${ability.description}</span>
-              </div>
-            `,
+            (ability) => {
+              const currentLevel = abilityLevel(ability.id);
+              const nextLevel = currentLevel + 1;
+              return `
+                <div>
+                  <strong>${ability.name} · ${currentLevel > 0 ? `LV.${currentLevel} → LV.${nextLevel}` : "신규 획득"}</strong>
+                  <span>${abilityEffectText(ability.id, nextLevel)}</span>
+                </div>
+              `;
+            },
           )
           .join("")}
       </div>
@@ -3004,9 +3236,25 @@ refs.runeChoices.addEventListener("click", (event) => {
   event.stopPropagation();
   replaceRune(button.dataset.runeId);
 });
+refs.abilityList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-ability-id]");
+  if (!button) return;
+  showAbilityDetail(button.dataset.abilityId);
+});
+refs.toolSlots.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-tool-id]");
+  if (!button) return;
+  selectTool(button.dataset.toolId);
+});
 
 refs.undoButton.addEventListener("click", undoLastRune);
 refs.resetButton.addEventListener("click", resetFloor);
+refs.qaMenuButton.addEventListener("click", () => {
+  setQaPanel(!state.qaOpen);
+});
+refs.qaCloseButton.addEventListener("click", () => {
+  setQaPanel(false);
+});
 refs.helpButton.addEventListener("click", () => {
   if (state.modalType === "levelup") {
     showLevelUpSelection();
@@ -3032,7 +3280,12 @@ refs.modalBackdrop.addEventListener("click", (event) => {
   }
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && refs.modalBackdrop.classList.contains("is-open")) {
+  if (event.key !== "Escape") return;
+  if (state.qaOpen) {
+    setQaPanel(false);
+    return;
+  }
+  if (refs.modalBackdrop.classList.contains("is-open")) {
     requestModalClose();
   }
 });

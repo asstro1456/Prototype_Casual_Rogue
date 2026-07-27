@@ -5,7 +5,7 @@ window.RUNE_TRACE_ANALYTICS_CONFIG = Object.freeze({
     production:
       "https://script.google.com/macros/s/AKfycbyy8cKUCoayoV_d9_cehUwr-nXANfO5SuP83SGCZK7rzxx5ICMjIIR6rUqKIhVyTRQ9HQ/exec",
   }),
-  testGroup: "external_prototype_v0.1.0",
+  testGroup: "external_prototype_v0.2.0",
   schemaVersion: 1,
   flushThreshold: 20,
   flushIntervalMs: 30000,
