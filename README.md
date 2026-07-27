@@ -10,11 +10,12 @@
 
 각 폴더는 외부 라이브러리 없이 독립적으로 실행된다.
 
+
+
+## License
 이 저장소는 포트폴리오 검토 및 평가 목적으로 공개되어 있습니다.
 별도의 서면 허가 없이 코드, 기획 문서, UI, 그래픽 및 기타 콘텐츠를
 복제·수정·배포하거나 다른 프로젝트에 이용할 수 없습니다.
-
-## License
 
 This project is publicly available for portfolio and evaluation purposes only.
 All rights are reserved. See [LICENSE](./LICENSE) for details.
