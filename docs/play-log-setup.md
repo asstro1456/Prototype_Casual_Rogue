@@ -26,7 +26,7 @@
 
 ```text
 activeEnvironment: production
-testGroup: external_prototype_v0.2.1
+testGroup: external_prototype_v0.2.2
 ```
 
 ### 게임 배포
@@ -112,7 +112,7 @@ await RuneTracePlayLog.flush()
 
 1. Apps Script 프로젝트의 `Code.gs`를 새 코드로 교체한다.
 2. 기존 웹 앱 배포를 새 버전으로 업데이트한다.
-3. GitHub Pages에 `v0.2.1` 게임 파일을 배포한다.
+3. GitHub Pages에 `v0.2.2` 게임 파일을 배포한다.
 4. 실제 HTTPS 주소에서 로그 1회 전송 후 새 시트 7개가 자동 생성되는지 확인한다.
 5. 과거 `Events`를 대시보드에 포함하려면 Apps Script 편집기에서 `migrateLegacyEvents()`를 완료될 때까지 반복 실행한다.
 

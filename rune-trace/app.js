@@ -1,4 +1,4 @@
-const APP_VERSION = "0.2.1";
+const APP_VERSION = "0.2.2";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -9,6 +9,7 @@ const EXPERIENCE_PER_LEVEL = 7;
 const MAX_CORRUPTION_SOURCES_PER_TURN = 2;
 const MAX_MONSTER_CORRUPTION_PER_FLOOR = 6;
 const SAVE_KEY = "rune-trace.run-state.v1";
+const COMPATIBLE_SAVE_VERSIONS = new Set(["0.2.1", APP_VERSION]);
 const TOOLS = [
   {
     id: "exploration-lens",
@@ -966,7 +967,7 @@ function restoreRunState() {
     if (!raw) return false;
     const payload = JSON.parse(raw);
     if (
-      payload?.version !== APP_VERSION ||
+      !COMPATIBLE_SAVE_VERSIONS.has(payload?.version) ||
       !payload.snapshot ||
       !Array.isArray(payload.bossConfigs)
     ) {
@@ -3056,8 +3057,10 @@ function ensureAbilityChoices() {
 function completeLevelUp(abilityId = null) {
   if (levelUpSelectionLocked || state.pendingLevelUps <= 0) return;
   levelUpSelectionLocked = true;
-  refs.modalActions
-    .querySelectorAll("button")
+  [
+    ...refs.modalBody.querySelectorAll("[data-levelup-ability-id]"),
+    ...refs.modalActions.querySelectorAll("button"),
+  ]
     .forEach((button) => {
       button.disabled = true;
     });
@@ -3354,10 +3357,14 @@ function showLevelUpModal() {
               const currentLevel = abilityLevel(ability.id);
               const nextLevel = currentLevel + 1;
               return `
-                <div>
+                <button
+                  class="level-choice-card"
+                  type="button"
+                  data-levelup-ability-id="${ability.id}"
+                >
                   <strong>${ability.name} · ${currentLevel > 0 ? `LV.${currentLevel} → LV.${nextLevel}` : "신규 획득"}</strong>
                   <span>${abilityEffectText(ability.id, nextLevel)}</span>
-                </div>
+                </button>
               `;
             },
           )
@@ -3374,18 +3381,6 @@ function showLevelUpModal() {
         onClick: showLevelUpBoard,
         className: "review-board-action",
       },
-      ...choices.map((ability) => {
-        const currentLevel = abilityLevel(ability.id);
-        return {
-          label: `${ability.name} · ${
-            currentLevel === 0
-              ? "획득"
-              : `LV.${currentLevel} → LV.${currentLevel + 1}`
-          }`,
-          onClick: () => completeLevelUp(ability.id),
-          className: `ability-action ability-${ability.id}`,
-        };
-      }),
     ],
   });
 }
@@ -3586,6 +3581,11 @@ refs.toolSlots.addEventListener("click", (event) => {
   const button = event.target.closest("[data-tool-id]");
   if (!button) return;
   selectTool(button.dataset.toolId);
+});
+refs.modalBody.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-levelup-ability-id]");
+  if (!button || state.modalType !== "levelup") return;
+  completeLevelUp(button.dataset.levelupAbilityId);
 });
 
 refs.undoButton.addEventListener("click", undoLastRune);

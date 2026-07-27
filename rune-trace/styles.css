@@ -43,9 +43,9 @@ body {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(0, 520px);
+  grid-template-columns: minmax(0, 920px);
   gap: 20px;
-  width: min(100%, 560px);
+  width: min(100%, 960px);
   min-height: 100vh;
   place-items: center;
   margin: 0 auto;
@@ -53,9 +53,9 @@ body {
 }
 
 .app-shell.is-qa-open {
-  grid-template-columns: 520px 320px;
-  width: 900px;
-  min-width: 900px;
+  grid-template-columns: 920px 320px;
+  width: 1300px;
+  min-width: 1300px;
   align-items: center;
   justify-items: stretch;
 }
@@ -1532,13 +1532,30 @@ body {
   margin: 15px 0;
 }
 
-.level-choice-list div {
+.level-choice-card {
   display: grid;
+  width: 100%;
   gap: 2px;
   padding: 9px 11px;
   border: 1px solid rgba(119, 219, 255, .14);
   border-radius: 11px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   background: rgba(8, 24, 45, .42);
+  cursor: pointer;
+}
+
+.level-choice-card:hover,
+.level-choice-card:focus-visible {
+  outline: none;
+  border-color: rgba(119, 219, 255, .7);
+  background: rgba(30, 73, 102, .7);
+}
+
+.level-choice-card:disabled {
+  opacity: .55;
+  cursor: default;
 }
 
 .level-choice-list strong {
@@ -1616,18 +1633,18 @@ body {
 
 @media (min-width: 760px) {
   .game-card {
-    width: min(100%, 920px);
+    width: 100%;
   }
 
   .tower-scene {
-    min-height: 570px;
+    min-height: 750px;
     padding-top: 72px;
   }
 
   .play-layout {
-    grid-template-columns: 112px 410px;
-    gap: 16px;
-    width: 538px;
+    grid-template-columns: 140px 560px;
+    gap: 20px;
+    width: 720px;
   }
 
   .rune-panel,
@@ -1645,10 +1662,10 @@ body {
 
   .app-shell.is-qa-open {
     display: grid;
-    grid-template-columns: 520px 320px;
+    grid-template-columns: 920px 320px;
     gap: 20px;
-    width: 900px;
-    min-width: 900px;
+    width: 1300px;
+    min-width: 1300px;
     padding: 20px;
   }
 
