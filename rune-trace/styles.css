@@ -650,6 +650,28 @@ body {
   opacity: .28;
 }
 
+.enemy.is-guardian-target {
+  outline: 3px double #82f2d0;
+  outline-offset: 3px;
+}
+
+.boss-hit-source {
+  position: absolute;
+  top: -34%;
+  left: 50%;
+  z-index: 3;
+  padding: 2px 5px;
+  border: 1px solid #ffe18c;
+  border-radius: 7px;
+  color: #2a1834;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: #ffe9a9;
+  transform: translateX(-50%);
+}
+
 .enemy-shield {
   position: absolute;
   right: -34%;
@@ -725,6 +747,11 @@ body {
   text-shadow: 0 0 8px rgba(191, 93, 226, .9);
 }
 
+.enemy-intent.is-escape-intent {
+  color: #91ffe0;
+  text-shadow: 0 0 8px rgba(72, 255, 199, .9);
+}
+
 .enemy-intent.is-defeat-preview {
   opacity: .24;
 }
@@ -751,6 +778,56 @@ body {
   opacity: .72;
 }
 
+.weak-point-marker,
+.collision-marker,
+.escape-crack {
+  position: absolute;
+  z-index: 6;
+  display: grid;
+  width: 70%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.weak-point-marker {
+  border: 3px double #ffdc72;
+  color: #fff0a9;
+  background: rgba(113, 61, 15, .62);
+  box-shadow: 0 0 15px rgba(255, 204, 87, .72);
+}
+
+.collision-marker {
+  border: 3px solid #ff926f;
+  color: #fff2e8;
+  background: rgba(132, 36, 31, .7);
+  box-shadow: 0 0 15px rgba(255, 99, 76, .7);
+}
+
+.escape-crack {
+  border: 3px dashed #77f0cf;
+  color: #c3ffef;
+  background: rgba(25, 91, 81, .65);
+  box-shadow: 0 0 15px rgba(68, 233, 190, .66);
+}
+
+.weak-point-marker b,
+.collision-marker b,
+.escape-crack b {
+  position: absolute;
+  bottom: -17px;
+  padding: 1px 4px;
+  border-radius: 5px;
+  color: #f4fbff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  background: rgba(8, 20, 39, .94);
+}
+
 .path-layer {
   position: absolute;
   inset: 0;
@@ -766,6 +843,19 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
+}
+
+.guardian-link-line {
+  stroke: #78eccb;
+  stroke-width: .09;
+  stroke-dasharray: .2 .12;
+  opacity: .85;
+  filter: drop-shadow(0 0 5px rgba(88, 242, 200, .9));
+}
+
+.guardian-link-line.is-triggered {
+  stroke: #fff09b;
+  stroke-width: .14;
 }
 
 .completed-path {
@@ -982,109 +1072,6 @@ body {
   color: #83e7c0;
 }
 
-.tool-dock {
-  margin-top: 9px;
-  padding: 9px;
-  border: 1px solid rgba(143, 207, 239, .14);
-  border-radius: 14px;
-  background: rgba(8, 22, 43, .72);
-}
-
-.tool-dock-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 7px;
-}
-
-.tool-dock-heading span {
-  color: #9bc2d8;
-  font-size: 9px;
-  font-weight: 900;
-}
-
-.tool-dock-heading small {
-  color: #627b95;
-  font-size: 7px;
-}
-
-.tool-slots {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 7px;
-}
-
-.tool-slot {
-  position: relative;
-  display: grid;
-  min-width: 0;
-  min-height: 52px;
-  padding: 6px 5px;
-  border: 1px solid rgba(143, 207, 239, .17);
-  border-radius: 12px;
-  place-items: center;
-  color: #adc5d8;
-  background: rgba(17, 39, 68, .75);
-  cursor: pointer;
-  transition: border-color .14s ease, box-shadow .14s ease, filter .14s ease;
-}
-
-.tool-slot.is-selected {
-  border-color: #80e3ff;
-  box-shadow:
-    0 0 0 2px rgba(113, 222, 255, .17),
-    0 0 17px rgba(82, 200, 244, .45);
-}
-
-.tool-slot:disabled {
-  opacity: .34;
-  filter: grayscale(.75);
-  cursor: default;
-}
-
-.tool-icon {
-  font-size: 19px;
-  line-height: 1;
-}
-
-.tool-name {
-  overflow: hidden;
-  max-width: 100%;
-  color: inherit;
-  font-size: 7px;
-  font-weight: 850;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tool-count {
-  position: absolute;
-  right: 5px;
-  bottom: 4px;
-  display: grid;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 3px;
-  border: 1px solid rgba(173, 228, 255, .32);
-  border-radius: 8px;
-  place-items: center;
-  color: #d9f6ff;
-  font-size: 7px;
-  background: rgba(6, 19, 38, .94);
-}
-
-.tool-slot.is-consuming {
-  animation: tool-consume .19s ease-in-out 1;
-}
-
-@keyframes tool-consume {
-  0%,
-  100% { transform: translateY(0); }
-  35% { transform: translateY(-3px); }
-  70% { transform: translateY(2px); }
-}
-
 .ability-list {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1130,6 +1117,12 @@ body {
 .ability-icon {
   font-size: 17px;
   line-height: 1;
+}
+
+.ability-name {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.15;
 }
 
 .ability-level {
@@ -1640,6 +1633,134 @@ body {
   filter: brightness(1.08);
 }
 
+/* v1.0.0 prototype readability baseline */
+.header-version,
+.header-version small,
+.title-lockup p,
+.floor-label span,
+.status-counts,
+.stage-row strong,
+.stage-floor-row i,
+.board-legend,
+.board-caption span,
+.board-caption strong,
+.section-heading span,
+.section-heading strong,
+.rune-card b,
+.rune-card small,
+.rune-note,
+.ability-list,
+.ability-level,
+.ability-mode,
+.qa-menu-button,
+.qa-panel-header small,
+.qa-actions small,
+.qa-group > small,
+.qa-field span,
+.modal-version,
+.modal-eyebrow,
+.boss-info-grid span,
+.result-grid span,
+.level-choice-list strong,
+.level-choice-list span,
+.level-preview span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.title-lockup h1,
+.modal-panel h2 {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.boss-effect-banner {
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.boss-effect-banner strong {
+  margin-right: 0;
+  color: #ffe2a2;
+  font-weight: 800;
+}
+
+.boss-effect-banner span {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.floor-label strong,
+.status-counts b,
+.section-heading strong,
+.ability-level,
+.ability-mode {
+  font-weight: 700;
+}
+
+.rune-card b,
+.ability-name,
+.rune-replace-button {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.feedback,
+.modal-body {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.feedback {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 42px;
+  max-height: 42px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.qa-panel > p,
+.qa-group h2,
+.qa-panel button,
+.qa-panel select,
+.modal-actions button {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.boss-info-grid strong,
+.level-choice-list strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.level-choice-list span {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.enemy-shield,
+.enemy-corruption-icon {
+  min-width: 24px;
+  min-height: 20px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.enemy {
+  font-size: 13px;
+}
+
+.modal-panel[data-modal-type="levelup"] .modal-actions .review-board-action {
+  font-size: 14px;
+  font-weight: 700;
+}
+
 @media (min-width: 760px) {
   .game-card {
     width: 100%;
@@ -1736,10 +1857,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tool-slot.is-consuming {
-    animation: tool-consume-reduced .19s ease 1;
-  }
-
   .grid-cell.is-link-endpoint::before {
     animation: none;
   }
@@ -1747,8 +1864,4 @@ body {
   .qa-panel {
     transition: none;
   }
-}
-
-@keyframes tool-consume-reduced {
-  50% { filter: brightness(1.45); }
 }

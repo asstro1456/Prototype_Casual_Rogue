@@ -1,4 +1,4 @@
-const APP_VERSION = "0.2.3";
+const APP_VERSION = "1.0.0";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -9,24 +9,7 @@ const EXPERIENCE_PER_LEVEL = 7;
 const MAX_CORRUPTION_SOURCES_PER_TURN = 2;
 const MAX_MONSTER_CORRUPTION_PER_FLOOR = 6;
 const SAVE_KEY = "rune-trace.run-state.v1";
-const COMPATIBLE_SAVE_VERSIONS = new Set(["0.2.1", "0.2.2", APP_VERSION]);
-const TOOLS = [
-  {
-    id: "exploration-lens",
-    name: "탐색 렌즈",
-    icon: "◉",
-  },
-  {
-    id: "cross-seal",
-    name: "교차 인장",
-    icon: "✣",
-  },
-  {
-    id: "purification-tool",
-    name: "정화 도구",
-    icon: "✦",
-  },
-];
+const COMPATIBLE_SAVE_VERSIONS = new Set(["0.2.3", APP_VERSION]);
 const ALL_ABILITIES = [
   {
     id: "temptation",
@@ -163,11 +146,9 @@ const refs = {
   undoReason: document.querySelector("#undoReason"),
   resetReason: document.querySelector("#resetReason"),
   abilityList: document.querySelector("#abilityList"),
-  toolSlots: document.querySelector("#toolSlots"),
   qaMenuButton: document.querySelector("#qaMenuButton"),
   qaPanel: document.querySelector("#qaPanel"),
   qaCloseButton: document.querySelector("#qaCloseButton"),
-  qaToolActions: document.querySelector("#qaToolActions"),
   qaAbilitySelect: document.querySelector("#qaAbilitySelect"),
   qaAbilityAddButton: document.querySelector("#qaAbilityAddButton"),
   qaAbilityReason: document.querySelector("#qaAbilityReason"),
@@ -255,9 +236,13 @@ const state = {
     runeLink: false,
     runeReplace: false,
   },
-  toolInventory: Object.fromEntries(TOOLS.map((tool) => [tool.id, 0])),
-  selectedToolId: null,
   bossConfigs: [],
+  bossMechanicStats: {
+    hitSources: {},
+    weakPointNoCandidate: 0,
+    escapeCount: 0,
+    escapeRemoved: {},
+  },
   pendingAbilityChoices: [],
   abilityChoiceLocks: {},
   replacementSerial: 0,
@@ -423,6 +408,11 @@ function floorEndPayload(success, failureReason = null) {
     surviving_enemies: state.enemies.length,
     corrupted_cell_count: state.corrupted.size,
     monster_corruption_created: state.monsterCorruptionCreated,
+    boss_hit_sources: { ...state.bossMechanicStats.hitSources },
+    boss_weak_point_no_candidate:
+      state.bossMechanicStats.weakPointNoCandidate,
+    boss_escape_count: state.bossMechanicStats.escapeCount,
+    boss_escape_removed: { ...state.bossMechanicStats.escapeRemoved },
     level: state.level,
     experience: state.experience,
   };
@@ -445,29 +435,36 @@ function currentBossConfig() {
 }
 
 function createBossConfigs() {
-  const earlyVariants = shuffle(["amplified-shield", "reinforcement"]);
+  const variants = ["weak-point", "guardian-link", "reinforcement"];
   return Array.from({ length: STAGES_PER_CHAPTER }, (_, index) => {
     const stage = index + 1;
     const baseShieldCount = stage === 3 ? 2 : 1;
-    const variant = stage === 3 ? "reinforcement" : earlyVariants[index];
+    const variant = variants[index];
     return {
       stage,
       type: "moving-boss",
       variant,
       baseShieldCount,
-      shieldCount:
-        baseShieldCount + (variant === "amplified-shield" ? 1 : 0),
+      shieldCount: baseShieldCount,
     };
   });
 }
 
 function bossVariantName(variant) {
+  if (variant === "weak-point") return "약점 표식";
+  if (variant === "guardian-link") return "수호 연결";
   if (variant === "amplified-shield") return "증폭 방어막";
   if (variant === "reinforcement") return "증원 소환";
   return "변형 없음";
 }
 
 function bossVariantEffect(variant) {
+  if (variant === "weak-point") {
+    return "표식을 직접 통과하면 보스 피격";
+  }
+  if (variant === "guardian-link") {
+    return "연결된 몬스터 처치 시 보스 피격";
+  }
   if (variant === "amplified-shield") {
     return "기본형보다 방어막 1개 추가";
   }
@@ -475,6 +472,16 @@ function bossVariantEffect(variant) {
     return "피격 후 생존 시 일반 몬스터 1체 소환";
   }
   return "추가 효과 없음";
+}
+
+function bossHitSourceName(source) {
+  return {
+    direct: "직접",
+    "endpoint-slash": "끝점",
+    "weak-point": "약점",
+    "guardian-link": "수호",
+    "charge-collision": "충돌",
+  }[source] ?? "피격";
 }
 
 function createRandomSeed() {
@@ -662,6 +669,12 @@ function pathCrossesCompletedTrace(path) {
       ) {
         const oldStart = completed.path[completedIndex - 1];
         const oldEnd = completed.path[completedIndex];
+        if (
+          !state.claimed.has(cellKey(oldStart.row, oldStart.col)) ||
+          !state.claimed.has(cellKey(oldEnd.row, oldEnd.col))
+        ) {
+          continue;
+        }
         if (!segmentsIntersect(newStart, newEnd, oldStart, oldEnd)) {
           continue;
         }
@@ -784,26 +797,31 @@ function spawnEnemies() {
     const normalPositions = allPositions
       .filter((position) => !sameCell(position, bossPosition))
       .slice(0, normalCount);
-    state.enemies = [
-      {
-        id: `${state.floor}-boss`,
-        kind: "boss",
-        row: bossPosition.row,
-        col: bossPosition.col,
-        shieldCount: config.shieldCount,
-        moveIntent: null,
-        summonRoll: nextRandom(),
-        corruptionPlanned: false,
-      },
-      ...normalPositions.map((position, index) => ({
-        id: `${state.floor}-enemy-${index}`,
-        kind: "normal",
-        ...position,
-        shieldCount: 0,
-        moveIntent: null,
-        corruptionPlanned: false,
-      })),
-    ];
+    const normalEnemies = normalPositions.map((position, index) => ({
+      id: `${state.floor}-enemy-${index}`,
+      kind: "normal",
+      ...position,
+      shieldCount: 0,
+      moveIntent: null,
+      corruptionPlanned: false,
+    }));
+    const boss = {
+      id: `${state.floor}-boss`,
+      kind: "boss",
+      row: bossPosition.row,
+      col: bossPosition.col,
+      shieldCount: config.shieldCount,
+      moveIntent: null,
+      weakPoint: null,
+      guardianTargetId: null,
+      summonRoll: nextRandom(),
+      corruptionPlanned: false,
+    };
+    if (config.variant === "guardian-link" && normalEnemies.length > 0) {
+      boss.guardianTargetId =
+        normalEnemies[Math.floor(nextRandom() * normalEnemies.length)].id;
+    }
+    state.enemies = [boss, ...normalEnemies];
     return;
   }
 
@@ -843,6 +861,158 @@ function planCorruptionSources() {
     });
 }
 
+function bossEscapeIntent(boss) {
+  const adjacent = MOVE_DIRECTIONS.map(
+    ({ rowDelta, colDelta, arrow }) => ({
+      row: boss.row + rowDelta,
+      col: boss.col + colDelta,
+      rowDelta,
+      colDelta,
+      arrow,
+    }),
+  ).filter(
+    ({ row, col }) =>
+      row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE,
+  );
+  const normalByKey = new Map(
+    state.enemies
+      .filter((enemy) => enemy.kind === "normal")
+      .map((enemy) => [cellKey(enemy.row, enemy.col), enemy]),
+  );
+  const priorities = [
+    {
+      kind: "trace",
+      candidates: adjacent.filter(({ row, col }) =>
+        state.claimed.has(cellKey(row, col)),
+      ),
+    },
+    {
+      kind: "corruption",
+      candidates: adjacent.filter(({ row, col }) =>
+        state.corrupted.has(cellKey(row, col)),
+      ),
+    },
+    {
+      kind: "monster",
+      candidates: adjacent.filter(({ row, col }) =>
+        normalByKey.has(cellKey(row, col)),
+      ),
+    },
+  ];
+  const group = priorities.find((entry) => entry.candidates.length > 0);
+  if (!group) {
+    const emptyCandidates = adjacent.filter(({ row, col }) => {
+      const key = cellKey(row, col);
+      return (
+        !state.claimed.has(key) &&
+        !state.corrupted.has(key) &&
+        !normalByKey.has(key)
+      );
+    });
+    if (emptyCandidates.length > 0) {
+      const target =
+        emptyCandidates[
+          Math.floor(nextRandom() * emptyCandidates.length)
+        ];
+      void logPlayEvent("boss_mechanic", {
+        mechanic: "escape",
+        result: "emergency_empty_move",
+        stage_index: currentStage(),
+        floor_in_stage: currentFloorInStage(),
+      });
+      return {
+        ...target,
+        escape: true,
+        obstacleKind: "empty",
+        targetEnemyId: null,
+      };
+    }
+    void logPlayEvent("boss_mechanic", {
+      mechanic: "escape",
+      result: "no_candidate",
+      stage_index: currentStage(),
+      floor_in_stage: currentFloorInStage(),
+    });
+    return null;
+  }
+  const target =
+    group.candidates[Math.floor(nextRandom() * group.candidates.length)];
+  return {
+    ...target,
+    escape: true,
+    obstacleKind: group.kind,
+    targetEnemyId:
+      group.kind === "monster"
+        ? normalByKey.get(cellKey(target.row, target.col))?.id ?? null
+        : null,
+  };
+}
+
+function planWeakPoint(boss) {
+  boss.weakPoint = null;
+  if (currentBossConfig()?.variant !== "weak-point") return;
+  const occupied = new Set(
+    state.enemies.map((enemy) => cellKey(enemy.row, enemy.col)),
+  );
+  const reservedKey = boss.moveIntent
+    ? cellKey(boss.moveIntent.row, boss.moveIntent.col)
+    : null;
+  const candidates = Array.from(
+    { length: BOARD_SIZE * BOARD_SIZE },
+    (_, index) => ({
+      row: Math.floor(index / BOARD_SIZE),
+      col: index % BOARD_SIZE,
+    }),
+  ).filter(({ row, col }) => {
+    const key = cellKey(row, col);
+    return (
+      key !== reservedKey &&
+      !occupied.has(key) &&
+      !state.claimed.has(key) &&
+      !state.corrupted.has(key) &&
+      canAnyRemainingRuneHitCell(row, col)
+    );
+  });
+  if (candidates.length === 0) {
+    state.bossMechanicStats.weakPointNoCandidate += 1;
+    void logPlayEvent("boss_mechanic", {
+      mechanic: "weak_point",
+      result: "no_candidate",
+      stage_index: currentStage(),
+      floor_in_stage: currentFloorInStage(),
+    });
+    return;
+  }
+  boss.weakPoint =
+    candidates[Math.floor(nextRandom() * candidates.length)];
+}
+
+function ensureBossStateForCurrentConfig() {
+  const boss = state.enemies.find((enemy) => enemy.kind === "boss");
+  const config = currentBossConfig();
+  if (!boss || !config) return;
+  boss.shieldCount = Math.min(boss.shieldCount, config.shieldCount);
+  if (config.variant === "guardian-link") {
+    boss.weakPoint = null;
+    if (!boss.guardianTargetId) {
+      const normalTargets = state.enemies.filter(
+        (enemy) => enemy.kind === "normal",
+      );
+      boss.guardianTargetId =
+        normalTargets[
+          Math.floor(nextRandom() * normalTargets.length)
+        ]?.id ?? null;
+    }
+  } else {
+    boss.guardianTargetId = null;
+  }
+  if (config.variant === "weak-point") {
+    if (!boss.weakPoint) planWeakPoint(boss);
+  } else {
+    boss.weakPoint = null;
+  }
+}
+
 function planEnemyMoves() {
   const occupied = new Set(
     state.enemies.map((enemy) => cellKey(enemy.row, enemy.col)),
@@ -879,8 +1049,11 @@ function planEnemyMoves() {
         );
       });
 
-    const destination =
+    let destination =
       candidates[Math.floor(nextRandom() * candidates.length)] ?? null;
+    if (enemy.kind === "boss" && !destination) {
+      destination = bossEscapeIntent(enemy);
+    }
     enemy.moveIntent = destination;
     if (destination) {
       reserved.add(cellKey(destination.row, destination.col));
@@ -889,6 +1062,9 @@ function planEnemyMoves() {
       enemy.summonRoll = nextRandom();
     }
   });
+  if (boss) {
+    planWeakPoint(boss);
+  }
   planCorruptionSources();
 }
 
@@ -907,6 +1083,7 @@ function createStateSnapshot() {
     enemies: state.enemies.map((enemy) => ({
       ...enemy,
       moveIntent: enemy.moveIntent ? { ...enemy.moveIntent } : null,
+      weakPoint: enemy.weakPoint ? { ...enemy.weakPoint } : null,
     })),
     defeated: state.defeated,
     directDefeated: state.directDefeated,
@@ -915,13 +1092,17 @@ function createStateSnapshot() {
     abilities: [...state.abilities],
     ricochetUsed: state.ricochetUsed,
     puzzleUses: { ...state.puzzleUses },
-    toolInventory: { ...state.toolInventory },
-    selectedToolId: state.selectedToolId,
     pendingAbilityChoices: [...state.pendingAbilityChoices],
     abilityChoiceLocks: { ...state.abilityChoiceLocks },
     replacementSerial: state.replacementSerial,
     randomState: state.randomState,
     monsterCorruptionCreated: state.monsterCorruptionCreated,
+    bossMechanicStats: {
+      hitSources: { ...state.bossMechanicStats.hitSources },
+      weakPointNoCandidate: state.bossMechanicStats.weakPointNoCandidate,
+      escapeCount: state.bossMechanicStats.escapeCount,
+      escapeRemoved: { ...state.bossMechanicStats.escapeRemoved },
+    },
     pendingLevelUps: state.pendingLevelUps,
     pendingOutcome: state.pendingOutcome,
     running: state.running,
@@ -942,6 +1123,7 @@ function restoreStateSnapshot(snapshot) {
   state.enemies = snapshot.enemies.map((enemy) => ({
     ...enemy,
     moveIntent: enemy.moveIntent ? { ...enemy.moveIntent } : null,
+    weakPoint: enemy.weakPoint ? { ...enemy.weakPoint } : null,
     corruptionPlanned: Boolean(enemy.corruptionPlanned),
   }));
   state.defeated = snapshot.defeated;
@@ -951,27 +1133,28 @@ function restoreStateSnapshot(snapshot) {
   state.abilities = [...snapshot.abilities];
   state.ricochetUsed = snapshot.ricochetUsed;
   state.puzzleUses = { ...snapshot.puzzleUses };
-  state.toolInventory = {
-    ...Object.fromEntries(TOOLS.map((tool) => [tool.id, 0])),
-    ...(snapshot.toolInventory ?? {}),
-  };
-  state.selectedToolId =
-    snapshot.selectedToolId &&
-    state.toolInventory[snapshot.selectedToolId] > 0
-      ? snapshot.selectedToolId
-      : null;
   state.pendingAbilityChoices = [...snapshot.pendingAbilityChoices];
   state.abilityChoiceLocks = { ...(snapshot.abilityChoiceLocks ?? {}) };
   state.replacementSerial = snapshot.replacementSerial;
   state.randomState = snapshot.randomState ?? state.randomState;
   state.monsterCorruptionCreated =
     snapshot.monsterCorruptionCreated ?? 0;
+  state.bossMechanicStats = {
+    hitSources: { ...(snapshot.bossMechanicStats?.hitSources ?? {}) },
+    weakPointNoCandidate:
+      snapshot.bossMechanicStats?.weakPointNoCandidate ?? 0,
+    escapeCount: snapshot.bossMechanicStats?.escapeCount ?? 0,
+    escapeRemoved: {
+      ...(snapshot.bossMechanicStats?.escapeRemoved ?? {}),
+    },
+  };
   if (snapshot.monsterCorruptionCreated === undefined) {
     planCorruptionSources();
   }
   state.pendingLevelUps = snapshot.pendingLevelUps;
   state.pendingOutcome = snapshot.pendingOutcome;
   state.running = snapshot.running;
+  ensureBossStateForCurrentConfig();
   state.levelUpReviewingBoard = false;
   state.currentPath = [];
   state.drawing = false;
@@ -1017,10 +1200,10 @@ function restoreRunState() {
       return false;
     }
     state.floor = payload.floor;
+    state.bossConfigs = createBossConfigs();
     restoreStateSnapshot(payload.snapshot);
     state.history = Array.isArray(payload.history) ? payload.history : [];
     state.floorInitialSnapshot = payload.floorInitialSnapshot ?? null;
-    state.bossConfigs = payload.bossConfigs;
     state.floorStartExperience = payload.floorStartExperience ?? 0;
     state.floorStartLevel = payload.floorStartLevel ?? 1;
     state.floorStartAbilities = payload.floorStartAbilities ?? [];
@@ -1073,10 +1256,15 @@ function startFloor(
     runeLink: false,
     runeReplace: false,
   };
-  state.selectedToolId = null;
   state.pendingAbilityChoices = [];
   state.replacementSerial = 0;
   state.monsterCorruptionCreated = 0;
+  state.bossMechanicStats = {
+    hitSources: {},
+    weakPointNoCandidate: 0,
+    escapeCount: 0,
+    escapeRemoved: {},
+  };
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
   state.history = [];
@@ -1194,10 +1382,6 @@ function resetPlayData(source = "qa") {
   state.experience = 0;
   state.level = 1;
   state.abilities = [];
-  state.toolInventory = Object.fromEntries(
-    TOOLS.map((tool) => [tool.id, 0]),
-  );
-  state.selectedToolId = null;
   state.abilityChoiceLocks = {};
   state.randomState = createRandomSeed();
   state.directDefeated = 0;
@@ -1364,8 +1548,12 @@ function summonPreviewCell(actors, pathKeys, boss) {
     return null;
   }
 
+  const escapeRemovedEnemyId =
+    boss.moveIntent?.escape ? boss.moveIntent.targetEnemyId : null;
   const projected = actors
-    .filter((actor) => actor.alive)
+    .filter(
+      (actor) => actor.alive && actor.id !== escapeRemovedEnemyId,
+    )
     .map((actor) => {
       const destination = actor.moveIntent;
       const destinationKey = destination
@@ -1373,9 +1561,14 @@ function summonPreviewCell(actors, pathKeys, boss) {
         : null;
       const canMove =
         destination &&
-        !pathKeys.has(destinationKey) &&
-        !state.claimed.has(destinationKey) &&
-        !state.corrupted.has(destinationKey);
+        (
+          destination.escape ||
+          (
+            !pathKeys.has(destinationKey) &&
+            !state.claimed.has(destinationKey) &&
+            !state.corrupted.has(destinationKey)
+          )
+        );
       return {
         id: actor.id,
         row: canMove ? destination.row : actor.row,
@@ -1412,9 +1605,14 @@ function summonPreviewCell(actors, pathKeys, boss) {
 }
 
 function corruptionPreview(actors, pathKeys, summonCell) {
+  const boss = actors.find((actor) => actor.kind === "boss");
+  const escapeRemovedEnemyId =
+    boss?.moveIntent?.escape ? boss.moveIntent.targetEnemyId : null;
   const projectedById = new Map();
   actors
-    .filter((actor) => actor.alive)
+    .filter(
+      (actor) => actor.alive && actor.id !== escapeRemovedEnemyId,
+    )
     .forEach((actor) => {
       const destination = actor.moveIntent;
       const destinationKey = destination
@@ -1422,9 +1620,14 @@ function corruptionPreview(actors, pathKeys, summonCell) {
         : null;
       const canMove =
         destination &&
-        !pathKeys.has(destinationKey) &&
-        !state.claimed.has(destinationKey) &&
-        !state.corrupted.has(destinationKey);
+        (
+          destination.escape ||
+          (
+            !pathKeys.has(destinationKey) &&
+            !state.claimed.has(destinationKey) &&
+            !state.corrupted.has(destinationKey)
+          )
+        );
       projectedById.set(actor.id, {
         row: canMove ? destination.row : actor.row,
         col: canMove ? destination.col : actor.col,
@@ -1441,7 +1644,10 @@ function corruptionPreview(actors, pathKeys, summonCell) {
   const cancelledCorruptionIds = new Set();
 
   actors
-    .filter((actor) => actor.corruptionPlanned)
+    .filter(
+      (actor) =>
+        actor.corruptionPlanned && actor.id !== escapeRemovedEnemyId,
+    )
     .forEach((actor) => {
       const projected = projectedById.get(actor.id);
       const originKey = cellKey(actor.row, actor.col);
@@ -1479,6 +1685,7 @@ function combatPreview(path) {
   const pathKeys = new Set(
     path.map(({ row, col }) => cellKey(row, col)),
   );
+  const boss = actors.find((actor) => actor.kind === "boss");
 
   function resolveHit(actor, source) {
     if (!actor?.alive || hitTargetIds.has(actor.id)) return null;
@@ -1508,6 +1715,13 @@ function combatPreview(path) {
     );
     resolveHit(actor, "direct");
   });
+  const weakPointTriggered =
+    currentBossConfig()?.variant === "weak-point" &&
+    boss?.weakPoint &&
+    pathKeys.has(cellKey(boss.weakPoint.row, boss.weakPoint.col));
+  if (weakPointTriggered) {
+    resolveHit(boss, "weak-point");
+  }
   const directNormalKills = outcomes.filter(
     (outcome) =>
       outcome.source === "direct" &&
@@ -1533,7 +1747,10 @@ function combatPreview(path) {
     temptationTargets(
       path,
       actors.filter(
-        (actor) => actor.alive && !hitTargetIds.has(actor.id),
+        (actor) =>
+          actor.kind === "normal" &&
+          actor.alive &&
+          !hitTargetIds.has(actor.id),
       ),
       temptationLevel,
     ).forEach((actor) => resolveHit(actor, "temptation"));
@@ -1557,7 +1774,32 @@ function combatPreview(path) {
     ).forEach((actor) => resolveHit(actor, "ricochet"));
   }
 
-  const boss = actors.find((actor) => actor.kind === "boss");
+  const guardianTargetDefeated =
+    currentBossConfig()?.variant === "guardian-link" &&
+    outcomes.some(
+      (outcome) =>
+        outcome.id === boss?.guardianTargetId &&
+        outcome.result === "kill",
+    );
+  if (guardianTargetDefeated) {
+    resolveHit(boss, "guardian-link");
+  }
+  const collisionTriggered = Boolean(
+    boss?.alive &&
+    boss.moveIntent &&
+    !boss.moveIntent.escape &&
+    pathKeys.has(cellKey(boss.moveIntent.row, boss.moveIntent.col)) &&
+    !state.claimed.has(
+      cellKey(boss.moveIntent.row, boss.moveIntent.col),
+    ) &&
+    !state.corrupted.has(
+      cellKey(boss.moveIntent.row, boss.moveIntent.col),
+    ),
+  );
+  if (collisionTriggered) {
+    resolveHit(boss, "charge-collision");
+  }
+  const bossOutcome = outcomes.find((outcome) => outcome.id === boss?.id);
   const summonCell = summonPreviewCell(actors, pathKeys, boss);
   const corruption = corruptionPreview(actors, pathKeys, summonCell);
   return {
@@ -1571,6 +1813,10 @@ function combatPreview(path) {
     rangeKeys,
     ricochetTriggered,
     directNormalKills,
+    weakPointTriggered,
+    guardianTargetDefeated,
+    collisionTriggered,
+    bossHitSource: bossOutcome?.source ?? null,
     summonCell,
     ...corruption,
   };
@@ -1628,8 +1874,8 @@ function renderStatus() {
   );
   const bossConfig = currentBossConfig();
   refs.bossEffectBanner.innerHTML = bossConfig
-    ? `<strong>${bossVariantName(bossConfig.variant)}</strong>${bossVariantEffect(bossConfig.variant)}`
-    : "<strong>보스 변형 없음</strong>추가 효과 없음";
+    ? `<strong>${bossVariantName(bossConfig.variant)}</strong><span>${bossVariantEffect(bossConfig.variant)}</span>`
+    : "<strong>보스 변형 없음</strong><span>추가 효과 없음</span>";
   refs.completeCount.textContent = `${complete} / ${RUNES_PER_FLOOR}`;
   refs.runeProgress.innerHTML = Array.from(
     { length: RUNES_PER_FLOOR },
@@ -1719,6 +1965,7 @@ function renderRunControls() {
             title="${ability.name} · ${usage.label}"
           >
             <span class="ability-icon" aria-hidden="true">${ability.icon}</span>
+            <span class="ability-name">${ability.name}</span>
             <span class="ability-level">LV.${ability.level}</span>
             <span class="ability-mode">${mode}</span>
             <i class="ability-use-state${usage.used ? " is-used" : ""}" aria-hidden="true"></i>
@@ -1727,33 +1974,6 @@ function renderRunControls() {
       })
       .join("");
   }
-
-  refs.toolSlots.innerHTML = TOOLS.map((tool) => {
-    const count = state.toolInventory[tool.id] ?? 0;
-    const selected = state.selectedToolId === tool.id && count > 0;
-    return `
-      <button
-        class="tool-slot${selected ? " is-selected" : ""}"
-        type="button"
-        data-tool-id="${tool.id}"
-        aria-pressed="${selected}"
-        aria-label="${tool.name}, ${count}개 보유"
-        ${count <= 0 || levelUpPending ? "disabled" : ""}
-      >
-        <span class="tool-icon" aria-hidden="true">${tool.icon}</span>
-        <span class="tool-name">${tool.name}</span>
-        <span class="tool-count">${count}</span>
-      </button>
-    `;
-  }).join("");
-
-  refs.qaToolActions.innerHTML = TOOLS.map(
-    (tool) => `
-      <button type="button" data-qa-tool-id="${tool.id}">
-        ${tool.icon} ${tool.name}
-      </button>
-    `,
-  ).join("");
 
   const selectedAbilityId = refs.qaAbilitySelect.value;
   const availableAbilities = ALL_ABILITIES.filter(
@@ -1838,22 +2058,6 @@ function updateQaSnapshots(mutator) {
   state.history.forEach(mutator);
 }
 
-function qaAddTool(toolId) {
-  const tool = TOOLS.find((entry) => entry.id === toolId);
-  if (!tool) return;
-  state.toolInventory[toolId] =
-    Number(state.toolInventory[toolId] ?? 0) + 1;
-  updateQaSnapshots((snapshot) => {
-    snapshot.toolInventory = {
-      ...(snapshot.toolInventory ?? {}),
-      [toolId]: Number(snapshot.toolInventory?.[toolId] ?? 0) + 1,
-    };
-  });
-  setFeedback(`${tool.name} 재고를 1개 추가했습니다.`, "success");
-  render();
-  saveRunState();
-}
-
 function qaAddAbility() {
   if (state.pendingLevelUps > 0) return;
   const ability = abilityById(refs.qaAbilitySelect.value);
@@ -1934,35 +2138,6 @@ function qaRerollAllRunes() {
   qaRerollRunes(remainingRunes().map((rune) => rune.instanceId));
 }
 
-function selectTool(toolId) {
-  if (state.pendingLevelUps > 0) {
-    showLevelUpSelection();
-    return;
-  }
-  if ((state.toolInventory[toolId] ?? 0) <= 0) return;
-  state.selectedToolId =
-    state.selectedToolId === toolId ? null : toolId;
-  renderRunControls();
-}
-
-function consumeTool(toolId) {
-  const count = state.toolInventory[toolId] ?? 0;
-  if (count <= 0) return false;
-  state.toolInventory[toolId] = count - 1;
-  if (state.selectedToolId === toolId) {
-    state.selectedToolId = null;
-  }
-  saveRunState();
-  renderRunControls();
-  const button = refs.toolSlots.querySelector(`[data-tool-id="${toolId}"]`);
-  button?.classList.add("is-consuming");
-  window.setTimeout(
-    () => button?.classList.remove("is-consuming"),
-    220,
-  );
-  return true;
-}
-
 function renderBoard() {
   const enemiesByCell = new Map(
     state.enemies.map((enemy) => [cellKey(enemy.row, enemy.col), enemy]),
@@ -1982,10 +2157,32 @@ function renderBoard() {
         directTargetIds: new Set(),
         extraTargetIds: new Set(),
         rangeKeys: new Set(),
+        weakPointTriggered: false,
+        guardianTargetDefeated: false,
+        collisionTriggered: false,
+        bossHitSource: null,
         summonCell: null,
         willCorruptIds: new Set(),
         cancelledCorruptionIds: new Set(),
       };
+  const boss = state.enemies.find((enemy) => enemy.kind === "boss");
+  const weakPointKey = boss?.weakPoint
+    ? cellKey(boss.weakPoint.row, boss.weakPoint.col)
+    : null;
+  const guardianTarget = state.enemies.find(
+    (enemy) => enemy.id === boss?.guardianTargetId,
+  );
+  const guardianTargetKey = guardianTarget
+    ? cellKey(guardianTarget.row, guardianTarget.col)
+    : null;
+  const collisionKey =
+    preview.collisionTriggered && boss?.moveIntent
+      ? cellKey(boss.moveIntent.row, boss.moveIntent.col)
+      : null;
+  const escapeKey =
+    boss?.moveIntent?.escape
+      ? cellKey(boss.moveIntent.row, boss.moveIntent.col)
+      : null;
   const summonKey = preview.summonCell
     ? cellKey(preview.summonCell.row, preview.summonCell.col)
     : null;
@@ -2000,6 +2197,9 @@ function renderBoard() {
       if (state.corrupted.has(key)) classes.push("is-corrupted");
       if (currentKeys.has(key)) classes.push("is-current");
       if (preview.rangeKeys.has(key)) classes.push("is-ability-range");
+      if (weakPointKey === key) classes.push("is-weak-point");
+      if (collisionKey === key) classes.push("is-collision-target");
+      if (escapeKey === key) classes.push("is-escape-target");
       if (
         canUseRuneLink() &&
         state.claimed.has(key) &&
@@ -2024,6 +2224,9 @@ function renderBoard() {
       }
       if (enemy?.corruptionPlanned) {
         enemyClasses.push("is-corruption-source");
+      }
+      if (guardianTargetKey === key) {
+        enemyClasses.push("is-guardian-target");
       }
       if (preview.hitTargetIds.has(enemy?.id)) {
         enemyClasses.push("is-hit-preview");
@@ -2059,9 +2262,14 @@ function renderBoard() {
                       ? `<span class="enemy-shield" aria-label="방어막 ${enemy.shieldCount}개">◈${enemy.shieldCount}</span>`
                       : ""
                   }
+                  ${
+                    enemy.kind === "boss" && preview.bossHitSource
+                      ? `<span class="boss-hit-source">${bossHitSourceName(preview.bossHitSource)}</span>`
+                      : ""
+                  }
                 </span>
                 <span
-                  class="enemy-intent${intent ? "" : " is-stopped"}${enemy.kind === "boss" ? " is-boss-intent" : ""}${preview.defeatTargetIds.has(enemy.id) ? " is-defeat-preview" : ""}"
+                  class="enemy-intent${intent ? "" : " is-stopped"}${enemy.kind === "boss" ? " is-boss-intent" : ""}${intent?.escape ? " is-escape-intent" : ""}${preview.defeatTargetIds.has(enemy.id) ? " is-defeat-preview" : ""}"
                   style="--move-x:${intent?.colDelta ?? 0};--move-y:${intent?.rowDelta ?? 0}"
                 >
                   ${
@@ -2079,20 +2287,44 @@ function renderBoard() {
               : ""
           }
           ${summonKey === key ? '<span class="summon-ghost" aria-label="증원 소환 예정">◆</span>' : ""}
+          ${weakPointKey === key ? '<span class="weak-point-marker" aria-label="약점 표식">◎<b>약점</b></span>' : ""}
+          ${collisionKey === key ? '<span class="collision-marker" aria-label="돌진 충돌 예정">!<b>충돌</b></span>' : ""}
+          ${escapeKey === key ? '<span class="escape-crack" aria-label="탈출 이동으로 제거 예정">✦<b>탈출</b></span>' : ""}
         </div>
       `);
     }
   }
   refs.gridCells.innerHTML = cells.join("");
 
-  const completedLines = state.completedPaths.map((entry) => {
-    const points = entry.path
-      .map(({ row, col }) => `${col + 0.5},${row + 0.5}`)
-      .join(" ");
+  const completedLines = [];
+  if (boss && guardianTarget) {
+    completedLines.push(
+      `<line class="guardian-link-line${preview.guardianTargetDefeated ? " is-triggered" : ""}" x1="${boss.col + 0.5}" y1="${boss.row + 0.5}" x2="${guardianTarget.col + 0.5}" y2="${guardianTarget.row + 0.5}"></line>`,
+    );
+  }
+  state.completedPaths.forEach((entry) => {
+    const segments = [];
+    let segment = [];
+    entry.path.forEach((point) => {
+      if (state.claimed.has(cellKey(point.row, point.col))) {
+        segment.push(point);
+      } else {
+        if (segment.length > 1) segments.push(segment);
+        segment = [];
+      }
+    });
+    if (segment.length > 1) segments.push(segment);
     const linking = linkPreview?.runeId === entry.runeId
       ? " is-link-preview"
       : "";
-    return `<polyline class="completed-path${linking}" points="${points}" style="stroke:${entry.color};color:${entry.color}"></polyline>`;
+    segments.forEach((pointsInSegment) => {
+      const points = pointsInSegment
+        .map(({ row, col }) => `${col + 0.5},${row + 0.5}`)
+        .join(" ");
+      completedLines.push(
+        `<polyline class="completed-path${linking}" points="${points}" style="stroke:${entry.color};color:${entry.color}"></polyline>`,
+      );
+    });
   });
 
   if (state.currentPath.length > 0) {
@@ -2484,36 +2716,105 @@ function finishDrawing(event) {
   commitRune(rune, [...state.currentPath]);
 }
 
-function moveEnemies() {
+function moveEnemies(collisionTriggered = false) {
   const movements = new Map();
-  state.enemies.forEach((enemy) => {
-    const origin = { row: enemy.row, col: enemy.col };
-    const destination = enemy.moveIntent;
-    if (!destination) {
-      movements.set(enemy.id, { origin, moved: false });
-      return;
+  let escapeResult = null;
+  const boss = state.enemies.find((enemy) => enemy.kind === "boss");
+  if (boss) {
+    const origin = { row: boss.row, col: boss.col };
+    const destination = boss.moveIntent;
+    if (destination?.escape) {
+      const destinationKey = cellKey(destination.row, destination.col);
+      if (destination.obstacleKind === "trace") {
+        state.claimed.delete(destinationKey);
+      } else if (destination.obstacleKind === "corruption") {
+        state.corrupted.delete(destinationKey);
+      } else if (destination.obstacleKind === "monster") {
+        state.enemies = state.enemies.filter(
+          (enemy) => enemy.id !== destination.targetEnemyId,
+        );
+      }
+      boss.row = destination.row;
+      boss.col = destination.col;
+      boss.moveIntent = null;
+      escapeResult = {
+        obstacleKind: destination.obstacleKind,
+        row: boss.row,
+        col: boss.col,
+      };
+      state.bossMechanicStats.escapeCount += 1;
+      state.bossMechanicStats.escapeRemoved[destination.obstacleKind] =
+        (state.bossMechanicStats.escapeRemoved[
+          destination.obstacleKind
+        ] ?? 0) + 1;
+      void logPlayEvent("boss_mechanic", {
+        mechanic: "escape",
+        result: "moved",
+        removed_obstacle: destination.obstacleKind,
+        stage_index: currentStage(),
+        floor_in_stage: currentFloorInStage(),
+      });
+      movements.set(boss.id, {
+        origin,
+        destination: { row: boss.row, col: boss.col },
+        moved: true,
+        escape: true,
+      });
+    } else if (collisionTriggered) {
+      boss.moveIntent = null;
+      movements.set(boss.id, { origin, moved: false, collision: true });
+    } else if (destination) {
+      const destinationKey = cellKey(destination.row, destination.col);
+      if (
+        state.claimed.has(destinationKey) ||
+        state.corrupted.has(destinationKey)
+      ) {
+        movements.set(boss.id, { origin, moved: false });
+      } else {
+        boss.row = destination.row;
+        boss.col = destination.col;
+        movements.set(boss.id, {
+          origin,
+          destination: { row: boss.row, col: boss.col },
+          moved: true,
+        });
+      }
+      boss.moveIntent = null;
+    } else {
+      movements.set(boss.id, { origin, moved: false });
     }
+  }
 
-    const destinationKey = cellKey(destination.row, destination.col);
-    if (
-      state.claimed.has(destinationKey) ||
-      state.corrupted.has(destinationKey)
-    ) {
+  state.enemies
+    .filter((enemy) => enemy.kind !== "boss")
+    .forEach((enemy) => {
+      const origin = { row: enemy.row, col: enemy.col };
+      const destination = enemy.moveIntent;
+      if (!destination) {
+        movements.set(enemy.id, { origin, moved: false });
+        return;
+      }
+
+      const destinationKey = cellKey(destination.row, destination.col);
+      if (
+        state.claimed.has(destinationKey) ||
+        state.corrupted.has(destinationKey)
+      ) {
+        enemy.moveIntent = null;
+        movements.set(enemy.id, { origin, moved: false });
+        return;
+      }
+
+      enemy.row = destination.row;
+      enemy.col = destination.col;
       enemy.moveIntent = null;
-      movements.set(enemy.id, { origin, moved: false });
-      return;
-    }
-
-    enemy.row = destination.row;
-    enemy.col = destination.col;
-    enemy.moveIntent = null;
-    movements.set(enemy.id, {
-      origin,
-      destination: { row: enemy.row, col: enemy.col },
-      moved: true,
+      movements.set(enemy.id, {
+        origin,
+        destination: { row: enemy.row, col: enemy.col },
+        moved: true,
+      });
     });
-  });
-  return movements;
+  return { movements, escapeResult };
 }
 
 function corruptCells(movements, reservedKeys = new Set()) {
@@ -2633,6 +2934,10 @@ function commitRune(rune, path) {
     ability_level:
       activeAbilities.map((ability) => abilityLevel(ability.id)).join(",") ||
       null,
+    boss_hit_source: preview.bossHitSource,
+    boss_collision_triggered: preview.collisionTriggered,
+    boss_weak_point_triggered: preview.weakPointTriggered,
+    boss_guardian_triggered: preview.guardianTargetDefeated,
   });
   state.pathStartedAt = 0;
   state.history.push(createStateSnapshot());
@@ -2691,6 +2996,22 @@ function commitRune(rune, path) {
   if (preview.ricochetTriggered) {
     state.ricochetUsed = true;
   }
+  if (preview.bossHitSource) {
+    state.bossMechanicStats.hitSources[preview.bossHitSource] =
+      (state.bossMechanicStats.hitSources[preview.bossHitSource] ?? 0) + 1;
+    void logPlayEvent("boss_hit", {
+      source: preview.bossHitSource,
+      result:
+        preview.outcomes.find(
+          (outcome) => preview.actors.find(
+            (actor) =>
+              actor.id === outcome.id && actor.kind === "boss",
+          ),
+        )?.result ?? null,
+      stage_index: currentStage(),
+      floor_in_stage: currentFloorInStage(),
+    });
+  }
   grantExperience(defeatedNow);
 
   const bossDefeated =
@@ -2733,7 +3054,7 @@ function commitRune(rune, path) {
       );
     }
     setFeedback(
-      `네 개의 룬이 공명했습니다. 직접 ${defeatedNow}체 · 능력 ${abilityDefeatedNow}체를 처치하고 EXP ${defeatedNow}을 얻었습니다.`,
+      `클리어 · 직접 ${defeatedNow} · 능력 ${abilityDefeatedNow} · EXP +${defeatedNow}`,
       "success",
     );
     render();
@@ -2742,7 +3063,9 @@ function commitRune(rune, path) {
     return;
   }
 
-  const movements = moveEnemies();
+  const { movements, escapeResult } = moveEnemies(
+    preview.collisionTriggered,
+  );
   const summonKey = preview.summonCell
     ? new Set([cellKey(preview.summonCell.row, preview.summonCell.col)])
     : new Set();
@@ -2809,7 +3132,7 @@ function commitRune(rune, path) {
       );
     }
     setFeedback(
-      `네 개의 룬이 공명했습니다. 직접 ${defeatedNow}체 · 능력 ${abilityDefeatedNow}체를 처치하고 EXP ${defeatedNow}을 얻었습니다.`,
+      `클리어 · 직접 ${defeatedNow} · 능력 ${abilityDefeatedNow} · EXP +${defeatedNow}`,
       "success",
     );
     render();
@@ -2862,11 +3185,9 @@ function commitRune(rune, path) {
   }
 
   const killCopy =
-    defeatedNow + abilityDefeatedNow > 0
-      ? `직접 ${defeatedNow}체 · 능력 ${abilityDefeatedNow}체 제거 · EXP +${defeatedNow}, `
-      : "";
+    `직접 ${defeatedNow} · 능력 ${abilityDefeatedNow} · EXP +${defeatedNow}`;
   setFeedback(
-    `${rune.name} 완성! ${killCopy}예고된 오염 ${corruptedNow}곳 발생 · 누적 ${state.monsterCorruptionCreated}/${MAX_MONSTER_CORRUPTION_PER_FLOOR}.${summoned ? " 증원이 소환됐습니다." : ""}`,
+    `${rune.name} · ${killCopy} · 오염 ${corruptedNow}/${MAX_MONSTER_CORRUPTION_PER_FLOOR}${preview.bossHitSource ? ` · 보스 ${bossHitSourceName(preview.bossHitSource)}` : ""}${escapeResult ? " · 보스 탈출" : ""}${summoned ? " · 증원 1체" : ""}`,
     "success",
   );
   render();
@@ -2994,12 +3315,9 @@ function showBossInfoModal(source = "manual") {
         <div><span>필요 타격</span><strong>${config.shieldCount + 1}</strong></div>
         <div><span>변형</span><strong>${bossVariantName(config.variant)}</strong></div>
       </div>
-      <p>보스는 일반 몬스터보다 먼저 이동 칸을 예약하며, 남은 룬으로 공격 가능한 칸만 선택합니다. 보스를 처치하면 일반 몬스터가 남아 있어도 즉시 클리어합니다.</p>
-      ${
-        config.variant === "reinforcement"
-          ? "<p><strong>증원 소환:</strong> 보스가 피격 후 생존하면 이동과 오염 처리 뒤 일반 몬스터 1체를 소환합니다. 소환 예정 칸은 룬 확정 전에 표시됩니다.</p>"
-          : "<p><strong>증폭 방어막:</strong> 기본형보다 방어막 1개가 추가됩니다.</p>"
-      }
+      <p><strong>기본 규칙:</strong> 한 룬 행동에 최대 1회 피격합니다. 새 룬으로 예약 칸을 막으면 <strong>돌진 충돌</strong>로 피격 후 정지합니다.</p>
+      <p><strong>탈출 이동:</strong> 완전히 갇히면 룬 흔적·오염·일반 몬스터 순으로 1개를 제거하고 이동합니다.</p>
+      <p><strong>${bossVariantName(config.variant)}:</strong> ${bossVariantEffect(config.variant)}.</p>
     `,
     actions: [
       {
@@ -3345,7 +3663,7 @@ function showQaDataResetModal() {
     eyebrow: "QA · DATA RESET",
     title: "플레이 데이터를<br>초기화할까요?",
     body: `
-      <p>현재 챕터 진행, EXP, 레벨, 능력, 도구와 보드 저장을 초기 상태로 되돌립니다.</p>
+      <p>현재 챕터 진행, EXP, 레벨, 능력과 보드 저장을 초기 상태로 되돌립니다.</p>
       <p>익명 참여자 ID, 로그 수집 동의와 이미 전송된 통계는 삭제하지 않습니다.</p>
     `,
     actions: [
@@ -3622,11 +3940,6 @@ refs.abilityList.addEventListener("click", (event) => {
   if (!button) return;
   showAbilityDetail(button.dataset.abilityId);
 });
-refs.toolSlots.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-tool-id]");
-  if (!button) return;
-  selectTool(button.dataset.toolId);
-});
 refs.modalBody.addEventListener("click", (event) => {
   const button = event.target.closest("[data-levelup-ability-id]");
   if (!button || state.modalType !== "levelup") return;
@@ -3635,11 +3948,6 @@ refs.modalBody.addEventListener("click", (event) => {
 
 refs.undoButton.addEventListener("click", undoLastRune);
 refs.resetButton.addEventListener("click", resetFloor);
-refs.qaToolActions.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-qa-tool-id]");
-  if (!button) return;
-  qaAddTool(button.dataset.qaToolId);
-});
 refs.qaAbilityAddButton.addEventListener("click", qaAddAbility);
 refs.qaLevelUpButton.addEventListener("click", qaTriggerLevelUp);
 refs.qaRuneRerollButton.addEventListener("click", qaRerollSelectedRune);
