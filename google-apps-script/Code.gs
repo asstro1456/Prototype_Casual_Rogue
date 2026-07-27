@@ -7,6 +7,7 @@ const SESSIONS_SHEET_NAME = "Sessions";
 const FLOOR_ATTEMPTS_SHEET_NAME = "Floor_Attempts";
 const DASHBOARD_DATA_SHEET_NAME = "Dashboard_Data";
 const DASHBOARD_SHEET_NAME = "Dashboard";
+const DASHBOARD_LAYOUT_VERSION = "dashboard_v0.2.1";
 const MAX_BATCH_SIZE = 50;
 const MAX_REQUEST_CHARS = 500000;
 const MAX_PAYLOAD_CHARS = 20000;
@@ -111,10 +112,12 @@ const DASHBOARD_DATA_HEADERS = [
 ];
 const ALLOWED_EVENT_NAMES = new Set([
   "session_start",
+  "session_resume",
   "session_end",
   "app_background",
   "app_resume",
   "state_restore",
+  "data_reset",
   "tutorial_start",
   "tutorial_step",
   "tutorial_complete",
@@ -329,16 +332,27 @@ function validateHeaders_(sheet, expectedHeaders) {
 function ensureDashboardSheet_(spreadsheet) {
   const sheet = spreadsheet.getSheetByName(DASHBOARD_SHEET_NAME)
     ?? spreadsheet.insertSheet(DASHBOARD_SHEET_NAME);
-  if (sheet.getRange("A1").getValue()) return;
+  if (sheet.getRange("Z1").getValue() === DASHBOARD_LAYOUT_VERSION) {
+    return;
+  }
+  if (
+    sheet.getRange("A1").getValue() &&
+    sheet.getRange("A8").getValue() !== "확정 중간 이탈 세션"
+  ) {
+    sheet.getRange("A1:F30").clearContent();
+  }
 
   sheet.getRange("A1").setValue("룬 트레이스 테스트 대시보드");
-  sheet.getRange("A2:A7").setValues([
+  sheet.getRange("A2:A10").setValues([
     ["참가자 수"],
     ["세션 수"],
     ["튜토리얼 완료율"],
     ["플로어 클리어율"],
     ["평균 플로어 시간(초)"],
     ["재시도 플로어 비율"],
+    ["확정 중간 이탈 세션"],
+    ["중간 이탈률"],
+    ["평균 세션 플레이 시간(분)"],
   ]);
   sheet.getRange("B2").setFormula(
     `=MAX(0,COUNTA(${PARTICIPANTS_SHEET_NAME}!A2:A))`,
@@ -358,16 +372,28 @@ function ensureDashboardSheet_(spreadsheet) {
   sheet.getRange("B7").setFormula(
     `=IFERROR(COUNTIF(${FLOOR_ATTEMPTS_SHEET_NAME}!T2:T,TRUE)/COUNTA(${FLOOR_ATTEMPTS_SHEET_NAME}!A2:A),0)`,
   );
-  sheet.getRange("A10").setValue("스테이지·플로어별 누적 결과");
-  sheet.getRange("A11").setFormula(
+  sheet.getRange("B8").setFormula(
+    `=COUNTIFS(${SESSIONS_SHEET_NAME}!L2:L,"page_hide_running",${SESSIONS_SHEET_NAME}!E2:E,"<>",${SESSIONS_SHEET_NAME}!E2:E,"<="&NOW()-TIME(0,5,0))`,
+  );
+  sheet.getRange("B9").setFormula(
+    `=IFERROR(B8/COUNTIFS(${SESSIONS_SHEET_NAME}!E2:E,"<>",${SESSIONS_SHEET_NAME}!E2:E,"<="&NOW()-TIME(0,5,0)),0)`,
+  );
+  sheet.getRange("B10").setFormula(
+    `=IFERROR(AVERAGE(FILTER(${SESSIONS_SHEET_NAME}!K2:K,${SESSIONS_SHEET_NAME}!E2:E<>"",${SESSIONS_SHEET_NAME}!E2:E<=NOW()-TIME(0,5,0)))/60000,0)`,
+  );
+  sheet.getRange("A13").setValue("스테이지·플로어별 누적 결과");
+  sheet.getRange("A14").setFormula(
     `=QUERY(${DASHBOARD_DATA_SHEET_NAME}!A:N,"select D,E,sum(G),sum(H),sum(I) where D is not null group by D,E label D '스테이지', E '플로어', sum(G) '시도', sum(H) '성공', sum(I) '실패'",1)`,
   );
   sheet.getRange("B4:B5").setNumberFormat("0.0%");
   sheet.getRange("B7").setNumberFormat("0.0%");
+  sheet.getRange("B9").setNumberFormat("0.0%");
   sheet.getRange("B6").setNumberFormat("0.0");
+  sheet.getRange("B10").setNumberFormat("0.0");
   sheet.setFrozenRows(1);
   sheet.setColumnWidth(1, 180);
   sheet.setColumnWidth(2, 120);
+  sheet.getRange("Z1").setValue(DASHBOARD_LAYOUT_VERSION);
 }
 
 function loadSessionIndex_(sheet, sessionId) {
@@ -648,16 +674,35 @@ function updateParticipant_(sheet, participantId, events) {
     .setValues([existing]);
 }
 
+function sheetDate_(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function eventDate_(event) {
+  return sheetDate_(event.client_time_utc) ?? new Date();
+}
+
 function updateSession_(sheet, sessionId, events) {
   const row = findExactRow_(sheet, 1, sessionId);
   const first = events[0];
+  const orderedEvents = [...events].sort(
+    (a, b) => eventDate_(a).getTime() - eventDate_(b).getTime(),
+  );
+  const earliestEventAt = eventDate_(orderedEvents[0]);
+  const latestEventAt = eventDate_(
+    orderedEvents[orderedEvents.length - 1],
+  );
   const existing = row
     ? sheet.getRange(row, 1, 1, SESSION_HEADERS.length).getValues()[0]
     : [
         sessionId,
         first.participant_id,
-        first.client_time_utc,
-        first.client_time_utc,
+        earliestEventAt,
+        latestEventAt,
         "",
         first.game_version,
         first.test_group,
@@ -667,18 +712,49 @@ function updateSession_(sheet, sessionId, events) {
         "",
         "",
       ];
-  const eventTimes = events.map((event) => event.client_time_utc).sort();
-  const start = events.find((event) => event.event_name === "session_start");
-  const end = [...events]
-    .reverse()
-    .find((event) => event.event_name === "session_end");
-  existing[2] = existing[2] || start?.client_time_utc || eventTimes[0];
-  existing[3] = eventTimes[eventTimes.length - 1];
-  if (end) {
-    existing[4] = end.client_time_utc;
-    existing[10] = end.payload?.active_time_ms ?? existing[10];
-    existing[11] = end.payload?.reason ?? existing[11];
-  }
+  const existingStartAt = sheetDate_(existing[2]);
+  const existingLastEventAt = sheetDate_(existing[3]);
+  existing[2] =
+    !existingStartAt || earliestEventAt < existingStartAt
+      ? earliestEventAt
+      : existingStartAt;
+  existing[3] =
+    !existingLastEventAt || latestEventAt > existingLastEventAt
+      ? latestEventAt
+      : existingLastEventAt;
+
+  orderedEvents
+    .filter((event) =>
+      ["session_resume", "session_end"].includes(event.event_name),
+    )
+    .forEach((event) => {
+      const eventAt = eventDate_(event);
+      const endedAt = sheetDate_(existing[4]);
+      if (event.event_name === "session_resume") {
+        if (!endedAt || eventAt >= endedAt) {
+          existing[4] = "";
+          existing[11] = "";
+        }
+        return;
+      }
+      if (
+        !endedAt &&
+        existingLastEventAt &&
+        eventAt < existingLastEventAt
+      ) {
+        return;
+      }
+      if (!endedAt || eventAt >= endedAt) {
+        existing[4] = eventAt;
+        existing[10] = Math.max(
+          Number(existing[10] || 0),
+          Number(event.payload?.active_time_ms || 0),
+        );
+        existing[11] = event.payload?.running
+          ? "page_hide_running"
+          : event.payload?.reason ?? existing[11];
+      }
+    });
   existing[7] = Number(existing[7] || 0) + events.length;
   existing[8] = Math.max(
     Number(existing[8] || 0),

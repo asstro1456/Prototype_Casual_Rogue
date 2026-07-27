@@ -1,4 +1,4 @@
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.2.1";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -138,6 +138,8 @@ const TRANSFORMS = [
 ];
 
 const refs = {
+  appShell: document.querySelector(".app-shell"),
+  gameCard: document.querySelector(".game-card"),
   floorContext: document.querySelector("#floorContext"),
   floorDisplay: document.querySelector("#floorDisplay"),
   chapterProgress: document.querySelector("#chapterProgress"),
@@ -164,6 +166,18 @@ const refs = {
   qaMenuButton: document.querySelector("#qaMenuButton"),
   qaPanel: document.querySelector("#qaPanel"),
   qaCloseButton: document.querySelector("#qaCloseButton"),
+  qaToolActions: document.querySelector("#qaToolActions"),
+  qaAbilitySelect: document.querySelector("#qaAbilitySelect"),
+  qaAbilityAddButton: document.querySelector("#qaAbilityAddButton"),
+  qaAbilityReason: document.querySelector("#qaAbilityReason"),
+  qaLevelUpButton: document.querySelector("#qaLevelUpButton"),
+  qaLevelUpReason: document.querySelector("#qaLevelUpReason"),
+  qaRuneSelect: document.querySelector("#qaRuneSelect"),
+  qaRuneRerollButton: document.querySelector("#qaRuneRerollButton"),
+  qaRuneRerollAllButton: document.querySelector("#qaRuneRerollAllButton"),
+  qaRuneReason: document.querySelector("#qaRuneReason"),
+  qaDataResetButton: document.querySelector("#qaDataResetButton"),
+  qaDataResetReason: document.querySelector("#qaDataResetReason"),
   helpButton: document.querySelector("#helpButton"),
   bossInfoButton: document.querySelector("#bossInfoButton"),
   modalBackdrop: document.querySelector("#modalBackdrop"),
@@ -230,6 +244,8 @@ const state = {
 
 const pathVariantCache = new Map();
 const pathSequenceCache = new Map();
+let levelUpSelectionLocked = false;
+let levelUpResumeInputBlockedUntil = 0;
 
 function cellKey(row, col) {
   return `${row}:${col}`;
@@ -1114,6 +1130,42 @@ function restartChapter() {
   showBossInfoForCurrentEntry();
 }
 
+function clearRunSave() {
+  try {
+    localStorage.removeItem(SAVE_KEY);
+  } catch (error) {
+    console.warn("룬 트레이스 진행 저장을 삭제하지 못했습니다.", error);
+  }
+}
+
+function resetPlayData(source = "qa") {
+  void logPlayEvent("data_reset", {
+    source,
+    previous_stage_index: currentStage(),
+    previous_floor_in_stage: currentFloorInStage(),
+    previous_level: state.level,
+    previous_experience: state.experience,
+  }, { flush: true });
+  clearRunSave();
+  state.experience = 0;
+  state.level = 1;
+  state.abilities = [];
+  state.toolInventory = Object.fromEntries(
+    TOOLS.map((tool) => [tool.id, 0]),
+  );
+  state.selectedToolId = null;
+  state.abilityChoiceLocks = {};
+  state.randomState = createRandomSeed();
+  state.directDefeated = 0;
+  state.ricochetUsed = false;
+  state.bossConfigs = createBossConfigs();
+  state.pendingLevelUps = 0;
+  state.pendingOutcome = null;
+  state.restoredFromSave = false;
+  startFloor(1);
+  setFeedback("플레이 데이터를 초기 상태로 되돌렸습니다.", "success");
+}
+
 function restartStage() {
   const firstFloor = (currentStage() - 1) * FLOORS_PER_STAGE + 1;
   void logPlayEvent("retry", {
@@ -1599,6 +1651,7 @@ function renderRunControls() {
   refs.qaMenuButton.setAttribute("aria-expanded", String(state.qaOpen));
   refs.qaPanel.setAttribute("aria-hidden", String(!state.qaOpen));
   refs.qaPanel.classList.toggle("is-open", state.qaOpen);
+  refs.appShell.classList.toggle("is-qa-open", state.qaOpen);
 
   if (state.abilities.length === 0) {
     refs.abilityList.innerHTML = "<small>획득 능력 없음</small>";
@@ -1649,6 +1702,78 @@ function renderRunControls() {
       </button>
     `;
   }).join("");
+
+  refs.qaToolActions.innerHTML = TOOLS.map(
+    (tool) => `
+      <button type="button" data-qa-tool-id="${tool.id}">
+        ${tool.icon} ${tool.name}
+      </button>
+    `,
+  ).join("");
+
+  const selectedAbilityId = refs.qaAbilitySelect.value;
+  const availableAbilities = ALL_ABILITIES.filter(
+    (ability) => abilityLevel(ability.id) < ability.maxLevel,
+  );
+  refs.qaAbilitySelect.innerHTML = availableAbilities.length > 0
+    ? availableAbilities
+        .map((ability) => `
+          <option value="${ability.id}">
+            ${ability.name} · LV.${abilityLevel(ability.id)}/${ability.maxLevel}
+          </option>
+        `)
+        .join("")
+    : '<option value="">모든 능력 최대 단계</option>';
+  if (
+    selectedAbilityId &&
+    availableAbilities.some((ability) => ability.id === selectedAbilityId)
+  ) {
+    refs.qaAbilitySelect.value = selectedAbilityId;
+  }
+  refs.qaAbilitySelect.disabled = availableAbilities.length === 0;
+  refs.qaAbilityAddButton.disabled =
+    levelUpPending || availableAbilities.length === 0;
+  refs.qaAbilityReason.textContent = levelUpPending
+    ? "대기 중인 레벨업 후보를 유지하기 위해 선택 완료 후 사용할 수 있습니다."
+    : availableAbilities.length === 0
+      ? "모든 능력이 최대 단계입니다."
+      : "선택 능력의 실제 보유 단계를 1 올립니다.";
+
+  refs.qaLevelUpButton.disabled = levelUpPending || !state.running;
+  refs.qaLevelUpReason.textContent = levelUpPending
+    ? "이미 처리할 레벨업이 대기 중입니다."
+    : !state.running
+      ? "플로어 진행 중에만 발생시킬 수 있습니다."
+      : "실제 EXP 지급 경로로 다음 레벨업을 발생시킵니다.";
+
+  const previousRuneId = refs.qaRuneSelect.value;
+  const rerollableRunes = remainingRunes();
+  refs.qaRuneSelect.innerHTML = rerollableRunes.length > 0
+    ? rerollableRunes
+        .map((rune) => `
+          <option value="${rune.instanceId}">
+            ${rune.name} · ${rune.points.length}칸
+          </option>
+        `)
+        .join("")
+    : '<option value="">남은 룬 없음</option>';
+  if (
+    previousRuneId &&
+    rerollableRunes.some((rune) => rune.instanceId === previousRuneId)
+  ) {
+    refs.qaRuneSelect.value = previousRuneId;
+  }
+  refs.qaRuneSelect.disabled = rerollableRunes.length === 0;
+  refs.qaRuneRerollButton.disabled = rerollableRunes.length === 0;
+  refs.qaRuneRerollAllButton.disabled = rerollableRunes.length === 0;
+  refs.qaRuneReason.textContent = rerollableRunes.length === 0
+    ? "교체할 남은 룬이 없습니다."
+    : "룬 교체 능력을 소비하지 않고 지정 범위만 다시 생성합니다.";
+
+  refs.qaDataResetButton.disabled = levelUpPending;
+  refs.qaDataResetReason.textContent = levelUpPending
+    ? "능력 선택을 완료한 뒤 초기화할 수 있습니다."
+    : "진행 저장만 초기화하며 익명 참여자 ID와 로그 동의는 유지합니다.";
 }
 
 function setQaPanel(open) {
@@ -1659,6 +1784,109 @@ function setQaPanel(open) {
   } else {
     refs.qaMenuButton.focus({ preventScroll: true });
   }
+}
+
+function updateQaSnapshots(mutator) {
+  if (state.floorInitialSnapshot) {
+    mutator(state.floorInitialSnapshot);
+  }
+  state.history.forEach(mutator);
+}
+
+function qaAddTool(toolId) {
+  const tool = TOOLS.find((entry) => entry.id === toolId);
+  if (!tool) return;
+  state.toolInventory[toolId] =
+    Number(state.toolInventory[toolId] ?? 0) + 1;
+  updateQaSnapshots((snapshot) => {
+    snapshot.toolInventory = {
+      ...(snapshot.toolInventory ?? {}),
+      [toolId]: Number(snapshot.toolInventory?.[toolId] ?? 0) + 1,
+    };
+  });
+  setFeedback(`${tool.name} 재고를 1개 추가했습니다.`, "success");
+  render();
+  saveRunState();
+}
+
+function qaAddAbility() {
+  if (state.pendingLevelUps > 0) return;
+  const ability = abilityById(refs.qaAbilitySelect.value);
+  if (!ability) return;
+  const currentLevel = abilityLevel(ability.id);
+  if (currentLevel >= ability.maxLevel) {
+    renderRunControls();
+    return;
+  }
+  state.abilities.push(ability.id);
+  state.floorStartAbilities.push(ability.id);
+  state.stageStartAbilities.push(ability.id);
+  updateQaSnapshots((snapshot) => {
+    snapshot.abilities = [...(snapshot.abilities ?? []), ability.id];
+  });
+  setFeedback(
+    `${ability.name}을 LV.${currentLevel + 1}(으)로 설정했습니다.`,
+    "success",
+  );
+  render();
+  saveRunState();
+}
+
+function qaTriggerLevelUp() {
+  if (state.pendingLevelUps > 0 || !state.running) return;
+  const requiredExperience = state.level * EXPERIENCE_PER_LEVEL;
+  const amount = Math.max(1, requiredExperience - state.experience);
+  grantExperience(amount);
+  setFeedback(`QA · EXP +${amount}, 레벨업 선택을 시작합니다.`, "success");
+  render();
+  saveRunState();
+  window.setTimeout(resolveQueuedModal, 0);
+}
+
+function createQaRerolledRune(previousRune) {
+  const candidates = RUNE_TEMPLATES.filter(
+    (template) => template.id !== previousRune.id,
+  );
+  const replacement =
+    candidates[Math.floor(nextRandom() * candidates.length)];
+  state.replacementSerial += 1;
+  return {
+    ...replacement,
+    points: replacement.points.map((point) => [...point]),
+    instanceId:
+      `${state.floor}-${replacement.id}-qa-${state.replacementSerial}`,
+    color: previousRune.color,
+    complete: false,
+  };
+}
+
+function qaRerollRunes(instanceIds) {
+  const targets = new Set(instanceIds);
+  if (targets.size === 0) return;
+  let changed = 0;
+  state.runes = state.runes.map((rune) => {
+    if (rune.complete || !targets.has(rune.instanceId)) return rune;
+    changed += 1;
+    return createQaRerolledRune(rune);
+  });
+  if (changed === 0) return;
+  state.currentPath = [];
+  state.drawing = false;
+  state.pointerId = null;
+  planEnemyMoves();
+  setFeedback(`QA · 남은 룬 ${changed}개를 다시 생성했습니다.`, "success");
+  render();
+  saveRunState();
+}
+
+function qaRerollSelectedRune() {
+  const instanceId = refs.qaRuneSelect.value;
+  if (!instanceId) return;
+  qaRerollRunes([instanceId]);
+}
+
+function qaRerollAllRunes() {
+  qaRerollRunes(remainingRunes().map((rune) => rune.instanceId));
 }
 
 function selectTool(toolId) {
@@ -2766,6 +2994,22 @@ function showLevelUpSelection() {
   window.setTimeout(() => refs.modalPanel.focus(), 0);
 }
 
+function interceptHiddenLevelUpInput(event) {
+  if (event.target.closest("#qaMenuButton")) return;
+  const now = Date.now();
+  const shouldResume =
+    state.modalType === "levelup" && state.levelUpReviewingBoard;
+  const shouldConsumeFollowUp =
+    event.type === "click" && now < levelUpResumeInputBlockedUntil;
+  if (!shouldResume && !shouldConsumeFollowUp) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (shouldResume) {
+    levelUpResumeInputBlockedUntil = now + 600;
+    showLevelUpSelection();
+  }
+}
+
 function availableAbilityChoices() {
   return ALL_ABILITIES.filter(
     (ability) => abilityLevel(ability.id) < ability.maxLevel,
@@ -2810,6 +3054,13 @@ function ensureAbilityChoices() {
 }
 
 function completeLevelUp(abilityId = null) {
+  if (levelUpSelectionLocked || state.pendingLevelUps <= 0) return;
+  levelUpSelectionLocked = true;
+  refs.modalActions
+    .querySelectorAll("button")
+    .forEach((button) => {
+      button.disabled = true;
+    });
   const resolvedLevel = state.level - state.pendingLevelUps + 1;
   const ability = abilityById(abilityId);
   const previousAbilityLevel = ability ? abilityLevel(ability.id) : 0;
@@ -2837,7 +3088,10 @@ function requestModalClose() {
     showLevelUpBoard();
     return;
   }
-  if (state.modalType === "consent") {
+  if (
+    state.modalType === "consent" ||
+    state.modalType === "return-after-exit"
+  ) {
     return;
   }
   if (state.modalDismissAction) {
@@ -2971,16 +3225,92 @@ function showPlayLogConsentModal() {
           await window.RuneTracePlayLog?.setConsent(true);
           startPlayLogSession({ logCurrentStart: true });
           if (state.restoredFromSave) {
-            void logPlayEvent("state_restore", {
-              restore_scope: "run",
-              stage_index: currentStage(),
-              floor_in_stage: currentFloorInStage(),
-              completed_runes: completedRuneCount(),
-              pending_level_ups: state.pendingLevelUps,
-              pending_outcome: state.pendingOutcome,
-            });
+            const reconnectState =
+              window.RuneTracePlayLog?.getReconnectState?.() ?? {};
+            if (reconnectState.returnedAfterExit) {
+              showReturnAfterExitModal(reconnectState);
+              return;
+            }
+            logRestoredRun(
+              reconnectState.resumedWithinGrace
+                ? "reconnect_within_grace"
+                : "consent_granted",
+            );
           }
           showIntroModal();
+        },
+      },
+    ],
+  });
+}
+
+function logRestoredRun(source = "page_load") {
+  void logPlayEvent("state_restore", {
+    restore_scope: "run",
+    source,
+    stage_index: currentStage(),
+    floor_in_stage: currentFloorInStage(),
+    completed_runes: completedRuneCount(),
+    pending_level_ups: state.pendingLevelUps,
+    pending_outcome: state.pendingOutcome,
+  });
+}
+
+function showReturnAfterExitModal(reconnectState) {
+  const gapMinutes = Math.max(
+    5,
+    Math.round(Number(reconnectState?.gapMs ?? 0) / 60000),
+  );
+  openModal({
+    type: "return-after-exit",
+    eyebrow: "RETURNING SESSION",
+    title: "이전 플레이를<br>어떻게 처리할까요?",
+    body: `
+      <p>마지막 접속 종료 후 약 <strong>${gapMinutes}분</strong>이 지나 별도 이탈 세션으로 기록했습니다.</p>
+      <p>저장된 진행을 이어서 플레이하거나 초기 상태로 되돌릴 수 있습니다. 초기화해도 익명 참여자 ID와 로그 수집 동의는 유지됩니다.</p>
+    `,
+    actions: [
+      {
+        label: "이어서 플레이",
+        onClick: () => {
+          logRestoredRun("return_after_exit");
+          showIntroModal();
+        },
+      },
+      {
+        label: "데이터 초기화",
+        primary: true,
+        onClick: () => {
+          closeModal();
+          resetPlayData("return_after_exit");
+          showIntroModal();
+        },
+      },
+    ],
+  });
+}
+
+function showQaDataResetModal() {
+  if (state.pendingLevelUps > 0) return;
+  openModal({
+    type: "data-reset-confirm",
+    eyebrow: "QA · DATA RESET",
+    title: "플레이 데이터를<br>초기화할까요?",
+    body: `
+      <p>현재 챕터 진행, EXP, 레벨, 능력, 도구와 보드 저장을 초기 상태로 되돌립니다.</p>
+      <p>익명 참여자 ID, 로그 수집 동의와 이미 전송된 통계는 삭제하지 않습니다.</p>
+    `,
+    actions: [
+      {
+        label: "취소",
+        onClick: closeModal,
+      },
+      {
+        label: "초기화",
+        primary: true,
+        onClick: () => {
+          closeModal();
+          resetPlayData("qa_panel");
         },
       },
     ],
@@ -3004,6 +3334,7 @@ function showHelpModal() {
 }
 
 function showLevelUpModal() {
+  levelUpSelectionLocked = false;
   const targetLevel = state.level - state.pendingLevelUps + 1;
   const choices = ensureAbilityChoices();
   if (choices.length === 0) {
@@ -3223,6 +3554,16 @@ function showFailModal() {
   });
 }
 
+refs.gameCard.addEventListener(
+  "pointerdown",
+  interceptHiddenLevelUpInput,
+  true,
+);
+refs.gameCard.addEventListener(
+  "click",
+  interceptHiddenLevelUpInput,
+  true,
+);
 refs.board.addEventListener("pointerdown", beginDrawing);
 refs.board.addEventListener("pointermove", continueDrawing);
 refs.board.addEventListener("pointerup", finishDrawing);
@@ -3249,6 +3590,16 @@ refs.toolSlots.addEventListener("click", (event) => {
 
 refs.undoButton.addEventListener("click", undoLastRune);
 refs.resetButton.addEventListener("click", resetFloor);
+refs.qaToolActions.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-qa-tool-id]");
+  if (!button) return;
+  qaAddTool(button.dataset.qaToolId);
+});
+refs.qaAbilityAddButton.addEventListener("click", qaAddAbility);
+refs.qaLevelUpButton.addEventListener("click", qaTriggerLevelUp);
+refs.qaRuneRerollButton.addEventListener("click", qaRerollSelectedRune);
+refs.qaRuneRerollAllButton.addEventListener("click", qaRerollAllRunes);
+refs.qaDataResetButton.addEventListener("click", showQaDataResetModal);
 refs.qaMenuButton.addEventListener("click", () => {
   setQaPanel(!state.qaOpen);
 });
@@ -3308,18 +3659,22 @@ const storedPlayLogConsent = window.RuneTracePlayLog?.getConsent();
 if (storedPlayLogConsent === "granted") {
   startPlayLogSession();
   if (restoredRun) {
-    void logPlayEvent("state_restore", {
-      restore_scope: "run",
-      stage_index: currentStage(),
-      floor_in_stage: currentFloorInStage(),
-      completed_runes: completedRuneCount(),
-      pending_level_ups: state.pendingLevelUps,
-      pending_outcome: state.pendingOutcome,
-    });
+    const reconnectState =
+      window.RuneTracePlayLog?.getReconnectState?.() ?? {};
+    if (reconnectState.returnedAfterExit) {
+      showReturnAfterExitModal(reconnectState);
+    } else {
+      logRestoredRun(
+        reconnectState.resumedWithinGrace
+          ? "reconnect_within_grace"
+          : "page_load",
+      );
+      showIntroModal();
+    }
   } else {
     startFloor(1);
+    showIntroModal();
   }
-  showIntroModal();
 } else {
   if (!restoredRun) {
     startFloor(1, { logStart: false });

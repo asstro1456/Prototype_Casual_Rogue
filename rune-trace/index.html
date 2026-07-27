@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="theme-color" content="#101d38">
   <title>룬 트레이스 — 프로토타입</title>
-  <link rel="stylesheet" href="./styles.css?v=0.2.0">
+  <link rel="stylesheet" href="./styles.css?v=0.2.1">
 </head>
 <body data-qa-enabled="true">
   <main class="app-shell">
     <section class="game-card" aria-label="룬 트레이스 게임 화면">
       <header class="topbar">
         <a class="header-version" href="../index.html" aria-label="프로토타입 허브로 돌아가기">
-          <span data-app-version>v0.2.0</span>
+          <span data-app-version>v0.2.1</span>
           <small>← HUB</small>
         </a>
         <div class="title-lockup">
@@ -104,32 +104,75 @@
       <button id="qaMenuButton" class="qa-menu-button" type="button" aria-controls="qaPanel" aria-expanded="false">
         QA
       </button>
-      <aside id="qaPanel" class="qa-panel" aria-hidden="true">
-        <div class="qa-panel-header">
-          <div>
-            <small>DEBUG CONTROLS</small>
-            <strong>QA 전용</strong>
-          </div>
-          <button id="qaCloseButton" class="qa-close-button" type="button" aria-label="QA 패널 닫기">×</button>
-        </div>
-        <p>게임 상태 복원 기능입니다. 패널은 기능 실행 후에도 유지됩니다.</p>
-        <div class="qa-actions">
-          <button id="undoButton" type="button">↶ 한 수 되돌리기</button>
-          <small id="undoReason">직전 행동 기록이 필요합니다.</small>
-          <button id="resetButton" type="button">층 초기화</button>
-          <small id="resetReason">플로어 최초 상태가 필요합니다.</small>
-        </div>
-      </aside>
-
       <button id="levelUpResumeButton" class="levelup-resume" type="button" hidden>
         능력 선택 보기
       </button>
     </section>
+    <aside id="qaPanel" class="qa-panel" aria-hidden="true">
+      <div class="qa-panel-header">
+        <div>
+          <small>DEBUG CONTROLS</small>
+          <strong>QA 전용</strong>
+        </div>
+        <button id="qaCloseButton" class="qa-close-button" type="button" aria-label="QA 패널 닫기">×</button>
+      </div>
+      <p>실제 게임 상태와 저장값을 함께 변경합니다. 기능 실행 후에도 패널은 유지됩니다.</p>
+
+      <section class="qa-group" aria-labelledby="qaRestoreTitle">
+        <h2 id="qaRestoreTitle">상태 복원</h2>
+        <div class="qa-actions">
+          <button id="undoButton" type="button">↶ 한 수 되돌리기</button>
+          <small id="undoReason">직전 행동 기록이 필요합니다.</small>
+          <button id="resetButton" type="button">플로어 초기화</button>
+          <small id="resetReason">플로어 최초 상태가 필요합니다.</small>
+        </div>
+      </section>
+
+      <section class="qa-group" aria-labelledby="qaToolTitle">
+        <h2 id="qaToolTitle">도구 재고 +1</h2>
+        <div id="qaToolActions" class="qa-button-grid"></div>
+      </section>
+
+      <section class="qa-group" aria-labelledby="qaAbilityTitle">
+        <h2 id="qaAbilityTitle">능력 추가·강화</h2>
+        <label class="qa-field">
+          <span>대상 능력</span>
+          <select id="qaAbilitySelect"></select>
+        </label>
+        <button id="qaAbilityAddButton" type="button">선택 능력 +1</button>
+        <small id="qaAbilityReason"></small>
+      </section>
+
+      <section class="qa-group" aria-labelledby="qaGrowthTitle">
+        <h2 id="qaGrowthTitle">성장</h2>
+        <button id="qaLevelUpButton" type="button">레벨업 발생</button>
+        <small id="qaLevelUpReason">다음 기준 EXP까지 지급합니다.</small>
+      </section>
+
+      <section class="qa-group" aria-labelledby="qaRuneTitle">
+        <h2 id="qaRuneTitle">룬 리롤</h2>
+        <label class="qa-field">
+          <span>남은 룬</span>
+          <select id="qaRuneSelect"></select>
+        </label>
+        <div class="qa-button-grid">
+          <button id="qaRuneRerollButton" type="button">선택 룬 리롤</button>
+          <button id="qaRuneRerollAllButton" type="button">남은 룬 전체 리롤</button>
+        </div>
+        <small id="qaRuneReason"></small>
+      </section>
+
+      <section class="qa-group qa-danger-group" aria-labelledby="qaDataTitle">
+        <h2 id="qaDataTitle">플레이 데이터</h2>
+        <button id="qaDataResetButton" type="button">플레이 데이터 초기화</button>
+        <small id="qaDataResetReason">익명 참여자 ID와 로그 동의는 유지합니다.</small>
+      </section>
+    </aside>
   </main>
 
   <div id="modalBackdrop" class="modal-backdrop is-open">
     <section id="modalPanel" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
-      <span class="modal-version" data-app-version>v0.2.0 · RUNE TRACE</span>
+      <span class="modal-version" data-app-version>v0.2.1 · RUNE TRACE</span>
       <button id="modalClose" class="modal-close" type="button" aria-label="도움말 닫기">×</button>
       <p id="modalEyebrow" class="modal-eyebrow">NEW PROTOTYPE</p>
       <h2 id="modalTitle">네 개의 룬으로<br>탑의 문을 여세요</h2>
@@ -138,8 +181,8 @@
     </section>
   </div>
 
-  <script src="./analytics-config.js?v=0.2.0"></script>
-  <script src="./play-log.js?v=0.2.0"></script>
-  <script src="./app.js?v=0.2.0"></script>
+  <script src="./analytics-config.js?v=0.2.1"></script>
+  <script src="./play-log.js?v=0.2.1"></script>
+  <script src="./app.js?v=0.2.1"></script>
 </body>
 </html>

@@ -7,6 +7,7 @@
   const STORAGE_KEYS = {
     participantId: "rune-trace.participant-id",
     consent: "rune-trace.play-log-consent",
+    sessionHandoff: "rune-trace.session-handoff.v1",
   };
   const DEFAULT_CONFIG = {
     activeEnvironment: "test",
@@ -16,6 +17,7 @@
     flushThreshold: 20,
     flushIntervalMs: 30000,
     idleTimeoutMs: 300000,
+    reconnectGraceMs: 300000,
     maxBatchSize: 50,
     maxQueueSize: 5000,
     debug: false,
@@ -26,6 +28,8 @@
   let participantId = null;
   let sessionId = null;
   let sessionStartedAt = null;
+  let previousActiveTimeMs = 0;
+  let backgroundPausedMs = 0;
   let sessionStarted = false;
   let sessionEnded = false;
   let backgroundStartedAt = null;
@@ -39,6 +43,13 @@
   let successfulFlushCount = 0;
   let failedFlushCount = 0;
   let lastActivityAt = Date.now();
+  let reconnectState = {
+    resumedWithinGrace: false,
+    returnedAfterExit: false,
+    gapMs: null,
+    previousSessionId: null,
+    previousWasRunning: false,
+  };
 
   function config() {
     const supplied = global.RUNE_TRACE_ANALYTICS_CONFIG ?? {};
@@ -109,6 +120,14 @@
     }
   }
 
+  function removeStoredValue(key) {
+    try {
+      global.localStorage.removeItem(key);
+    } catch {
+      debug("localStorage 값을 삭제하지 못했습니다.");
+    }
+  }
+
   function getParticipantId() {
     const existing = storedValue(STORAGE_KEYS.participantId);
     if (existing) return existing;
@@ -123,6 +142,39 @@
       .replace(/\D/g, "")
       .slice(0, 14);
     return `session_${timestamp}_${randomToken(8)}`;
+  }
+
+  function readSessionHandoff() {
+    const raw = storedValue(STORAGE_KEYS.sessionHandoff);
+    if (!raw) return null;
+    try {
+      const handoff = JSON.parse(raw);
+      if (
+        handoff?.participant_id !== participantId ||
+        typeof handoff?.session_id !== "string" ||
+        !Number.isFinite(handoff?.ended_at_ms) ||
+        !Number.isFinite(handoff?.active_time_ms)
+      ) {
+        removeStoredValue(STORAGE_KEYS.sessionHandoff);
+        return null;
+      }
+      return handoff;
+    } catch {
+      removeStoredValue(STORAGE_KEYS.sessionHandoff);
+      return null;
+    }
+  }
+
+  function currentActiveTimeMs(now = Date.now()) {
+    if (!sessionStartedAt) return previousActiveTimeMs;
+    const currentPause = backgroundStartedAt === null
+      ? 0
+      : Math.max(0, now - backgroundStartedAt);
+    const segmentTime = Math.max(
+      0,
+      now - sessionStartedAt - backgroundPausedMs - currentPause,
+    );
+    return previousActiveTimeMs + segmentTime;
   }
 
   function createEventId() {
@@ -391,7 +443,6 @@
     if (
       events.length === 0 ||
       !endpoint() ||
-      isIdle() ||
       global.location.protocol === "file:" ||
       !global.navigator.sendBeacon
     ) {
@@ -408,12 +459,27 @@
     if (getConsent() !== "granted" || sessionStarted) return;
     sessionStarted = true;
     sessionStartedAt = Date.now();
-    void log("session_start", {
-      returning_participant: Boolean(
-        storedValue("rune-trace.has-played-before"),
-      ),
-      ...payload,
-    });
+    sessionEnded = false;
+    backgroundStartedAt = null;
+    backgroundPausedMs = 0;
+    if (reconnectState.resumedWithinGrace) {
+      void log("session_resume", {
+        interruption_duration_ms: reconnectState.gapMs,
+        previous_active_time_ms: previousActiveTimeMs,
+        reconnect_grace_ms: config().reconnectGraceMs,
+        ...payload,
+      }, { flush: true });
+    } else {
+      void log("session_start", {
+        returning_participant: Boolean(
+          storedValue("rune-trace.has-played-before"),
+        ),
+        return_after_exit: reconnectState.returnedAfterExit,
+        interruption_duration_ms: reconnectState.gapMs,
+        ...payload,
+      });
+    }
+    removeStoredValue(STORAGE_KEYS.sessionHandoff);
     storeValue("rune-trace.has-played-before", "true");
   }
 
@@ -422,12 +488,13 @@
     if (global.document.visibilityState === "hidden") {
       backgroundStartedAt = Date.now();
       void log("app_background", {
-        active_time_ms: Date.now() - sessionStartedAt,
+        active_time_ms: currentActiveTimeMs(),
       }, { flush: true });
       return;
     }
     if (backgroundStartedAt !== null) {
       const interruptionDuration = Date.now() - backgroundStartedAt;
+      backgroundPausedMs += interruptionDuration;
       backgroundStartedAt = null;
       void log("app_resume", {
         interruption_duration_ms: interruptionDuration,
@@ -445,7 +512,19 @@
     }
     sessionEnded = true;
     const events = [];
+    const endedAt = Date.now();
+    const activeTimeMs = currentActiveTimeMs(endedAt);
     const currentContext = contextProvider?.() ?? {};
+    storeValue(
+      STORAGE_KEYS.sessionHandoff,
+      JSON.stringify({
+        participant_id: participantId,
+        session_id: sessionId,
+        ended_at_ms: endedAt,
+        active_time_ms: activeTimeMs,
+        running: Boolean(currentContext.running),
+      }),
+    );
     if (currentContext.running) {
       events.push(createEvent("stage_quit", {
         reason: "page_hide",
@@ -453,8 +532,10 @@
       }));
     }
     events.push(createEvent("session_end", {
-      active_time_ms: Date.now() - sessionStartedAt,
+      active_time_ms: activeTimeMs,
+      running: Boolean(currentContext.running),
       reason: "page_hide",
+      reconnect_grace_ms: config().reconnectGraceMs,
     }));
     events.forEach((event) => {
       void queueCreatedEvent(event);
@@ -466,6 +547,7 @@
     storeValue(STORAGE_KEYS.consent, granted ? "granted" : "declined");
     if (!granted) {
       await clearQueue();
+      removeStoredValue(STORAGE_KEYS.sessionHandoff);
     }
     return getConsent();
   }
@@ -492,6 +574,7 @@
       nextRetryAt: nextRetryAt
         ? new Date(nextRetryAt).toISOString()
         : null,
+      reconnectState: { ...reconnectState },
     };
   }
 
@@ -501,7 +584,27 @@
     gameVersion = options.gameVersion ?? gameVersion;
     contextProvider = options.getContext ?? contextProvider;
     participantId = getParticipantId();
-    sessionId = createSessionId();
+    const handoff = readSessionHandoff();
+    if (handoff) {
+      const gapMs = Math.max(0, Date.now() - handoff.ended_at_ms);
+      reconnectState = {
+        resumedWithinGrace: gapMs <= config().reconnectGraceMs,
+        returnedAfterExit:
+          gapMs > config().reconnectGraceMs && Boolean(handoff.running),
+        gapMs,
+        previousSessionId: handoff.session_id,
+        previousWasRunning: Boolean(handoff.running),
+      };
+      if (reconnectState.resumedWithinGrace) {
+        sessionId = handoff.session_id;
+        previousActiveTimeMs = handoff.active_time_ms;
+      } else {
+        sessionId = createSessionId();
+        previousActiveTimeMs = 0;
+      }
+    } else {
+      sessionId = createSessionId();
+    }
     void openDatabase().catch((error) => {
       debug("IndexedDB 초기화에 실패했습니다.", error);
     });
@@ -529,6 +632,7 @@
     getConsent,
     setConsent,
     startSession,
+    getReconnectState: () => ({ ...reconnectState }),
     log,
     flush: () => {
       markActivity();

@@ -12,6 +12,8 @@
 - 자동 전송 조건: 대기 20개, 30초 경과, 주요 종료 이벤트
 - 무입력 중단: 마지막 클릭·터치·키 입력 후 5분이 지나면 네트워크 전송을 멈추고 로컬 큐에만 보관
 - 전송 재개: 다음 사용자 입력 또는 다음 실행에서 재시도
+- 이탈 유예: 탭 종료 후 5분 안에 재접속하면 같은 `session_id`와 누적 활성 시간으로 이어서 기록
+- 이탈 확정: 5분을 넘겨 재접속하면 이전 세션을 중간 이탈로 집계하고 새 세션을 시작
 - 정식 테스트 환경: HTTPS
 
 ## 배포 설정
@@ -24,7 +26,7 @@
 
 ```text
 activeEnvironment: production
-testGroup: external_prototype_v0.2.0
+testGroup: external_prototype_v0.2.1
 ```
 
 ### 게임 배포
@@ -36,6 +38,7 @@ testGroup: external_prototype_v0.2.0
 - 최초 실행 시 익명 플레이 기록 전송 동의를 묻는다.
 - 동의 전이나 거부 상태에서는 이벤트를 저장·전송하지 않는다.
 - 익명 `participant_id`와 동의 상태는 브라우저 `localStorage`에 보관한다.
+- 마지막 종료 세션 ID·종료 시각·누적 활성 시간은 재접속 판정을 위해 `localStorage`에 보관한다.
 - 미전송 이벤트는 `rune-trace-play-log` IndexedDB의 `events` 저장소에 보관한다.
 - 큐는 최대 5,000개이며 초과 시 가장 오래된 이벤트부터 삭제한다.
 
@@ -57,6 +60,7 @@ await RuneTracePlayLog.getStatus()
 - 성공·실패 전송 횟수
 - 마지막 성공 전송 시각
 - 다음 재시도 시각
+- 5분 내 동일 세션 복귀 또는 5분 초과 이탈 복귀 상태
 
 수동 전송 재시도:
 
@@ -76,17 +80,20 @@ await RuneTracePlayLog.flush()
 8. 네트워크를 복구한 뒤 대기 이벤트가 전송되는지 확인한다.
 9. 페이지를 5분 이상 조작하지 않아 `idle: true`가 되고 전송이 멈추는지 확인한다.
 10. 다시 클릭한 뒤 대기 이벤트가 전송되는지 확인한다.
+11. 탭을 닫고 5분 안에 다시 열어 같은 `session_id`가 유지되고 `Sessions`의 종료 상태가 해제되는지 확인한다.
+12. 탭을 닫고 5분을 넘겨 다시 열어 새 `session_id`가 생성되고 플레이 데이터 초기화 선택창이 표시되는지 확인한다.
+13. 종료 후 5분이 지난 세션이 `Dashboard`의 중간 이탈과 평균 세션 플레이 시간에 반영되는지 확인한다.
 
 ## 현재 이벤트 연결 범위
 
 현재 게임 흐름에 존재하는 다음 이벤트를 기록한다.
 
-- 세션·앱: `session_start`, `session_end`, `app_background`, `app_resume`
+- 세션·앱: `session_start`, `session_resume`, `session_end`, `app_background`, `app_resume`
 - 튜토리얼: `tutorial_start`, `tutorial_step`, `tutorial_complete`, `tutorial_quit`
 - 진행: `stage_start`, `floor_start`, `floor_end`, `stage_clear`, `stage_fail`, `retry`, `stage_quit`
 - 룬: `rune_selected`, `path_result`
 
-현재 구현된 보스 정보·전투·종료와 진행 복원은 `boss_start`, `boss_info_view`, `boss_end`, `state_restore`로 기록한다. 아직 기능이 없는 `tool_*`, `ad_*`는 거짓 이벤트를 만들지 않는다.
+현재 구현된 보스 정보·전투·종료, 진행 복원과 명시적 초기화는 `boss_start`, `boss_info_view`, `boss_end`, `state_restore`, `data_reset`으로 기록한다. 아직 기능이 없는 `tool_*`, `ad_*`는 거짓 이벤트를 만들지 않는다.
 
 ## 압축 저장과 대시보드
 
@@ -94,17 +101,18 @@ await RuneTracePlayLog.flush()
 - Apps Script는 같은 세션·스테이지·플로어의 이벤트를 최대 셀 크기 안에서 `event_batch_v1` JSON으로 묶어 `Raw_Batches` 한 행에 저장한다.
 - `Session_Index`는 세션별 이벤트 ID를 여러 압축 청크로 보관해 매 요청마다 과거 `Events` 전체를 읽지 않고 중복을 제거한다.
 - `Participants`는 참가자별 세션 수·튜토리얼 완료·최고 도달 구간을 누적한다.
-- `Sessions`는 세션별 시작·종료·이벤트 수·최고 도달 구간을 누적한다.
+- `Sessions`는 세션별 시작·종료·이벤트 수·최고 도달 구간·누적 활성 시간·중간 이탈 여부를 누적한다. 5분 내 복귀한 세션은 종료 상태를 해제한다.
 - `Floor_Attempts`는 플로어 시도별 성공·실패·소요시간·경로 결과를 누적한다.
 - `Dashboard_Data`는 버전·테스트 그룹·스테이지·플로어·보스 변형별 결과를 증분 집계한다.
-- `Dashboard`는 참가자 수, 세션 수, 튜토리얼 완료율, 플로어 클리어율, 평균 시간, 재시도율과 플로어별 누적 결과를 표시한다.
+- `Dashboard`는 참가자 수, 세션 수, 튜토리얼 완료율, 플로어 클리어율, 평균 시간, 재시도율, 확정 중간 이탈 수·비율, 평균 세션 플레이 시간과 플로어별 누적 결과를 표시한다.
+- 중간 이탈은 `Dashboard_Data`의 플로어 실패로 섞지 않고 `Sessions`를 원본으로 별도 계산한다. 실행 중 탭 종료 후 5분이 지나야 이탈과 평균 세션 시간의 확정 집계에 포함된다.
 - 기존 `Events`는 삭제하거나 수정하지 않는다. Apps Script 편집기에서 `migrateLegacyEvents()`를 반복 실행하면 한 번에 최대 200행씩 새 압축·집계 구조로 옮길 수 있다.
 
 ### 배포 후 사용자 작업
 
 1. Apps Script 프로젝트의 `Code.gs`를 새 코드로 교체한다.
 2. 기존 웹 앱 배포를 새 버전으로 업데이트한다.
-3. GitHub Pages에 `v0.2.0` 게임 파일을 배포한다.
+3. GitHub Pages에 `v0.2.1` 게임 파일을 배포한다.
 4. 실제 HTTPS 주소에서 로그 1회 전송 후 새 시트 7개가 자동 생성되는지 확인한다.
 5. 과거 `Events`를 대시보드에 포함하려면 Apps Script 편집기에서 `migrateLegacyEvents()`를 완료될 때까지 반복 실행한다.
 

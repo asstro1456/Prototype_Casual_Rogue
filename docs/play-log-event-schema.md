@@ -14,7 +14,7 @@
 | `event_name` | string | Apps Script 허용 목록의 고정 이벤트명 |
 | `client_time_utc` | string | 브라우저 발생 시각 |
 | `participant_id` | string | 같은 브라우저에서 유지되는 익명 ID |
-| `session_id` | string | 페이지 실행마다 생성되는 세션 ID |
+| `session_id` | string | 첫 접속에 생성되며 탭 종료 후 5분 안에 복귀하면 유지되는 세션 ID |
 | `game_version` | string | 룬 트레이스 버전 |
 | `schema_version` | integer | 현재 `1` |
 | `platform` | string | `web_windows`, `web_android`, `web_macos`, `web_linux`, `web_other` |
@@ -30,8 +30,9 @@
 
 | 이벤트 | 주요 payload |
 |---|---|
-| `session_start` | `returning_participant`, `entry_point` |
-| `session_end` | `active_time_ms`, `reason` |
+| `session_start` | `returning_participant`, `return_after_exit`, `interruption_duration_ms`, `entry_point` |
+| `session_resume` | `interruption_duration_ms`, `previous_active_time_ms`, `reconnect_grace_ms` |
+| `session_end` | `active_time_ms`, `running`, `reason`, `reconnect_grace_ms` |
 | `app_background` | `active_time_ms` |
 | `app_resume` | `interruption_duration_ms` |
 | `stage_quit` | `reason`, `completed_runes` |
@@ -76,7 +77,10 @@
 현재 게임은 진행 복원과 보스 흐름에서 다음 이벤트를 발생시킨다.
 
 - `state_restore`
+- `data_reset`
 - `boss_start`, `boss_info_view`, `boss_end`
+
+`session_end`는 탭 종료 시 즉시 기록을 시도하지만 5분 동안 잠정 종료로 본다. 같은 브라우저가 5분 안에 돌아오면 `session_resume`으로 같은 세션을 다시 열고, 5분을 넘기면 이전 세션의 실행 중 `page_hide`를 중간 이탈로 확정한다.
 
 현재 게임에 해당 기능이 없으므로 다음 이벤트는 발생시키지 않는다.
 
