@@ -1,4 +1,4 @@
-const APP_VERSION = "0.0.8";
+const APP_VERSION = "0.0.9";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -145,6 +145,11 @@ const state = {
   running: true,
   modalType: "intro",
   levelUpReviewingBoard: false,
+  floorStartedAt: 0,
+  stageStartedAt: 0,
+  pathStartedAt: 0,
+  tutorialStartedAt: 0,
+  lastFailureReason: null,
 };
 
 const pathVariantCache = new Map();
@@ -179,6 +184,75 @@ function currentStage() {
 
 function currentFloorInStage() {
   return ((state.floor - 1) % FLOORS_PER_STAGE) + 1;
+}
+
+function stageId() {
+  return `chapter_01_stage_${currentStage()}`;
+}
+
+function elapsedSince(startedAt) {
+  return startedAt > 0
+    ? Math.max(0, Math.round(performance.now() - startedAt))
+    : 0;
+}
+
+function logPlayEvent(eventName, payload = {}, options = {}) {
+  return window.RuneTracePlayLog?.log(eventName, payload, options)
+    ?? Promise.resolve(null);
+}
+
+function playLogContext() {
+  return {
+    stageId: stageId(),
+    floorIndex: state.floor,
+    running: state.running,
+    completedRunes: state.completedPaths.length,
+  };
+}
+
+function boardLogPayload() {
+  return {
+    chapter_id: "chapter_01",
+    stage_index: currentStage(),
+    floor_in_stage: currentFloorInStage(),
+    board_size: BOARD_SIZE,
+    enemy_count: state.enemies.length,
+    corrupted_cell_count: state.corrupted.size,
+    claimed_cell_count: state.claimed.size,
+    rune_ids: state.runes.map((rune) => rune.instanceId),
+    rune_types: state.runes.map((rune) => rune.id),
+    seed: null,
+  };
+}
+
+function logStageAndFloorStart({ retry = false } = {}) {
+  if (currentFloorInStage() === 1) {
+    void logPlayEvent("stage_start", {
+      chapter_id: "chapter_01",
+      stage_index: currentStage(),
+      seed: null,
+      retry,
+    });
+  }
+  void logPlayEvent("floor_start", {
+    ...boardLogPayload(),
+    retry,
+  });
+}
+
+function floorEndPayload(success, failureReason = null) {
+  return {
+    success,
+    failure_reason: failureReason,
+    duration_ms: elapsedSince(state.floorStartedAt),
+    completed_runes: state.completedPaths.length,
+    direct_defeated: state.directDefeated,
+    ability_defeated: state.defeated - state.directDefeated,
+    surviving_enemies: state.enemies.length,
+    corrupted_cell_count: state.corrupted.size,
+    level: state.level,
+    experience: state.experience,
+  };
 }
 
 function isStageFinalFloor() {
@@ -453,7 +527,10 @@ function restoreStateSnapshot(snapshot) {
   state.pointerId = null;
 }
 
-function startFloor(floor, { retry = false } = {}) {
+function startFloor(
+  floor,
+  { retry = false, logStart = true, analyticsRetry = false } = {},
+) {
   if (retry) {
     state.experience = state.floorStartExperience;
     state.level = state.floorStartLevel;
@@ -483,11 +560,19 @@ function startFloor(floor, { retry = false } = {}) {
   state.pendingOutcome = null;
   state.history = [];
   state.running = true;
+  state.lastFailureReason = null;
   spawnEnemies();
   planEnemyMoves();
   state.floorInitialSnapshot = createStateSnapshot();
+  state.floorStartedAt = performance.now();
+  if (currentFloorInStage() === 1) {
+    state.stageStartedAt = state.floorStartedAt;
+  }
   setFeedback("목록에 있는 룬을 판 위에 바로 그리세요.");
   render();
+  if (logStart) {
+    logStageAndFloorStart({ retry: analyticsRetry });
+  }
 }
 
 function undoLastRune() {
@@ -508,16 +593,35 @@ function resetFloor() {
   if (!state.floorInitialSnapshot) {
     return;
   }
+  const previousFailureReason = state.lastFailureReason;
+  void logPlayEvent("retry", {
+    retry_scope: "floor",
+    previous_failure_reason: previousFailureReason,
+    retry_stage_id: stageId(),
+    retry_floor_index: state.floor,
+  });
   restoreStateSnapshot(state.floorInitialSnapshot);
   state.history = [];
   state.running = true;
+  state.lastFailureReason = null;
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
+  state.floorStartedAt = performance.now();
   setFeedback("현재 층을 최초 배치로 초기화했습니다.");
   render();
+  void logPlayEvent("floor_start", {
+    ...boardLogPayload(),
+    retry: true,
+  });
 }
 
 function restartChapter() {
+  void logPlayEvent("retry", {
+    retry_scope: "chapter",
+    previous_failure_reason: state.lastFailureReason,
+    retry_stage_id: "chapter_01_stage_1",
+    retry_floor_index: 1,
+  });
   state.experience = 0;
   state.level = 1;
   state.abilities = [];
@@ -525,17 +629,23 @@ function restartChapter() {
   state.continuousDefeatUsed = false;
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
-  startFloor(1);
+  startFloor(1, { analyticsRetry: true });
 }
 
 function restartStage() {
   const firstFloor = (currentStage() - 1) * FLOORS_PER_STAGE + 1;
+  void logPlayEvent("retry", {
+    retry_scope: "stage",
+    previous_failure_reason: state.lastFailureReason,
+    retry_stage_id: stageId(),
+    retry_floor_index: firstFloor,
+  });
   state.experience = state.stageStartExperience;
   state.level = state.stageStartLevel;
   state.abilities = [...state.stageStartAbilities];
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
-  startFloor(firstFloor);
+  startFloor(firstFloor, { analyticsRetry: true });
 }
 
 function remainingRunes() {
@@ -1108,6 +1218,25 @@ function beginDrawing(event) {
   }
   const cell = cellFromPointer(event);
   if (!cell || isBlocked(cell)) {
+    const blockedKey = cell ? cellKey(cell.row, cell.col) : null;
+    void logPlayEvent("path_result", {
+      rune_id: null,
+      rune_type: null,
+      path_cell_count: cell ? 1 : 0,
+      processed_monster_count: 0,
+      intersection_count: 0,
+      crossed_corruption: Boolean(
+        blockedKey && state.corrupted.has(blockedKey),
+      ),
+      valid: false,
+      invalid_reason: blockedKey && state.corrupted.has(blockedKey)
+        ? "blocked_by_corruption"
+        : blockedKey && state.claimed.has(blockedKey)
+          ? "blocked_by_trace"
+          : "invalid_path",
+      invalid_detail: cell ? "blocked_start_cell" : "outside_board",
+      input_duration_ms: 0,
+    });
     setFeedback("완성된 룬과 오염된 칸 위에는 새 룬을 그릴 수 없습니다.", "alert");
     return;
   }
@@ -1116,6 +1245,7 @@ function beginDrawing(event) {
   state.drawing = true;
   state.pointerId = event.pointerId;
   state.currentPath = [];
+  state.pathStartedAt = performance.now();
   refs.board.setPointerCapture?.(event.pointerId);
   appendDrawingCell(cell);
 }
@@ -1129,9 +1259,27 @@ function continueDrawing(event) {
 }
 
 function cancelDrawing() {
+  const cancelledPath = [...state.currentPath];
+  if (cancelledPath.length > 0) {
+    void logPlayEvent("path_result", {
+      rune_id: null,
+      rune_type: null,
+      path_cell_count: cancelledPath.length,
+      processed_monster_count: 0,
+      intersection_count: state.enemies.filter((enemy) =>
+        cancelledPath.some((cell) => sameCell(cell, enemy)),
+      ).length,
+      crossed_corruption: false,
+      valid: false,
+      invalid_reason: "invalid_path",
+      invalid_detail: "pointer_cancelled",
+      input_duration_ms: elapsedSince(state.pathStartedAt),
+    });
+  }
   state.drawing = false;
   state.pointerId = null;
   state.currentPath = [];
+  state.pathStartedAt = 0;
   renderBoard();
 }
 
@@ -1148,8 +1296,23 @@ function finishDrawing(event) {
     matchesRune(state.currentPath, entry),
   );
   if (!rune) {
+    void logPlayEvent("path_result", {
+      rune_id: null,
+      rune_type: null,
+      path_cell_count: state.currentPath.length,
+      processed_monster_count: 0,
+      intersection_count: state.enemies.filter((enemy) =>
+        state.currentPath.some((cell) => sameCell(cell, enemy)),
+      ).length,
+      crossed_corruption: false,
+      valid: false,
+      invalid_reason: "invalid_path",
+      invalid_detail: "rune_not_matched",
+      input_duration_ms: elapsedSince(state.pathStartedAt),
+    });
     setFeedback("목록의 남은 룬과 일치하지 않습니다. 다시 그려보세요.", "alert");
     state.currentPath = [];
+    state.pathStartedAt = 0;
     renderBoard();
     return;
   }
@@ -1254,6 +1417,29 @@ function resolveQueuedModal() {
 
 function commitRune(rune, path) {
   const preview = combatPreview(path);
+  const activeAbility = activeStandaloneAbility();
+  void logPlayEvent("rune_selected", {
+    rune_id: rune.instanceId,
+    rune_type: rune.id,
+    selection_method: "auto_recognized",
+  });
+  void logPlayEvent("path_result", {
+    rune_id: rune.instanceId,
+    rune_type: rune.id,
+    path_cell_count: path.length,
+    processed_monster_count:
+      preview.directTargetIds.size + preview.extraTargetIds.size,
+    direct_defeated: preview.directTargetIds.size,
+    ability_defeated: preview.extraTargetIds.size,
+    intersection_count: preview.directTargetIds.size,
+    crossed_corruption: false,
+    valid: true,
+    invalid_reason: null,
+    input_duration_ms: elapsedSince(state.pathStartedAt),
+    ability_id: activeAbility?.id ?? null,
+    ability_level: activeAbility?.level ?? null,
+  });
+  state.pathStartedAt = 0;
   state.history.push(createStateSnapshot());
   const pathKeys = new Set(path.map(({ row, col }) => cellKey(row, col)));
   pathKeys.forEach((key) => state.claimed.add(key));
@@ -1288,6 +1474,25 @@ function commitRune(rune, path) {
       : isStageFinalFloor()
         ? "stage-clear"
         : "floor-clear";
+    void logPlayEvent(
+      "floor_end",
+      floorEndPayload(true),
+      { flush: true },
+    );
+    if (isStageFinalFloor()) {
+      void logPlayEvent(
+        "stage_clear",
+        {
+          chapter_id: "chapter_01",
+          stage_index: currentStage(),
+          duration_ms: elapsedSince(state.stageStartedAt),
+          final_level: state.level,
+          final_experience: state.experience,
+          total_defeated_on_final_floor: state.defeated,
+        },
+        { flush: true },
+      );
+    }
     setFeedback(
       `네 개의 룬이 공명했습니다. 직접 ${defeatedNow}체 · 능력 ${abilityDefeatedNow}체를 처치하고 EXP ${defeatedNow}을 얻었습니다.`,
       "success",
@@ -1304,7 +1509,27 @@ function commitRune(rune, path) {
   const fittingRunes = remainingRunes().filter((entry) => canTemplateFit(entry));
   if (fittingRunes.length === 0) {
     state.running = false;
+    state.lastFailureReason = "blocked_by_corruption";
     state.pendingOutcome = "fail";
+    void logPlayEvent(
+      "floor_end",
+      floorEndPayload(false, state.lastFailureReason),
+      { flush: true },
+    );
+    void logPlayEvent(
+      "stage_fail",
+      {
+        chapter_id: "chapter_01",
+        stage_index: currentStage(),
+        duration_ms: elapsedSince(state.stageStartedAt),
+        failure_reason: state.lastFailureReason,
+        completed_runes: state.completedPaths.length,
+        remaining_runes: remainingRunes().map((entry) => entry.id),
+        surviving_enemies: state.enemies.length,
+        corrupted_cell_count: state.corrupted.size,
+      },
+      { flush: true },
+    );
     setFeedback("오염으로 남은 룬을 놓을 공간이 사라졌습니다.", "alert");
     render();
     window.setTimeout(resolveQueuedModal, 260);
@@ -1420,7 +1645,17 @@ function requestModalClose() {
     showLevelUpBoard();
     return;
   }
-  if (state.modalType === "intro" || state.modalType === "help") {
+  if (state.modalType === "intro") {
+    void logPlayEvent("tutorial_quit", {
+      tutorial_version: 1,
+      last_step_id: "intro_rules",
+      reason: "modal_close",
+      duration_ms: elapsedSince(state.tutorialStartedAt),
+    });
+    closeModal();
+    return;
+  }
+  if (state.modalType === "help") {
     closeModal();
   }
 }
@@ -1440,6 +1675,15 @@ function rulesMarkup() {
 }
 
 function showIntroModal() {
+  state.tutorialStartedAt = performance.now();
+  void logPlayEvent("tutorial_start", {
+    tutorial_version: 1,
+  });
+  void logPlayEvent("tutorial_step", {
+    tutorial_version: 1,
+    step_id: "intro_rules",
+    status: "entered",
+  });
   openModal({
     type: "intro",
     eyebrow: "NEW PROTOTYPE",
@@ -1449,7 +1693,62 @@ function showIntroModal() {
       {
         label: "탑에 들어가기",
         primary: true,
-        onClick: closeModal,
+        onClick: () => {
+          const duration = elapsedSince(state.tutorialStartedAt);
+          void logPlayEvent("tutorial_step", {
+            tutorial_version: 1,
+            step_id: "intro_rules",
+            status: "completed",
+            duration_ms: duration,
+          });
+          void logPlayEvent("tutorial_complete", {
+            tutorial_version: 1,
+            duration_ms: duration,
+          });
+          closeModal();
+        },
+      },
+    ],
+  });
+}
+
+function startPlayLogSession({ logCurrentStart = false } = {}) {
+  window.RuneTracePlayLog?.startSession({
+    entry_point: "game_load",
+  });
+  if (logCurrentStart) {
+    logStageAndFloorStart();
+  }
+}
+
+function showPlayLogConsentModal() {
+  openModal({
+    type: "consent",
+    eyebrow: "ANONYMOUS PLAY LOG",
+    title: "익명 플레이 기록<br>전송 안내",
+    body: `
+      <p>게임 개선을 위해 익명 플레이 기록이 자동 전송됩니다. 이름·이메일 등 직접 식별 정보는 수집하지 않습니다.</p>
+      <div class="rule-list">
+        <div class="rule"><b>1</b><span>플로어 진행, 룬 결과, 성공·실패와 소요시간을 기록합니다.</span></div>
+        <div class="rule"><b>2</b><span>동의하지 않으면 플레이 로그를 저장하거나 전송하지 않습니다.</span></div>
+      </div>
+    `,
+    actions: [
+      {
+        label: "동의하지 않음",
+        onClick: async () => {
+          await window.RuneTracePlayLog?.setConsent(false);
+          showIntroModal();
+        },
+      },
+      {
+        label: "동의하고 시작",
+        primary: true,
+        onClick: async () => {
+          await window.RuneTracePlayLog?.setConsent(true);
+          startPlayLogSession({ logCurrentStart: true });
+          showIntroModal();
+        },
       },
     ],
   });
@@ -1673,5 +1972,21 @@ document.querySelectorAll("[data-app-version]").forEach((label) => {
   label.textContent = `v${APP_VERSION}${label.classList.contains("modal-version") ? ` · ${APP_VERSION_NAME}` : ""}`;
 });
 
-startFloor(1);
-showIntroModal();
+window.RuneTracePlayLog?.init({
+  gameVersion: APP_VERSION,
+  getContext: playLogContext,
+});
+
+const storedPlayLogConsent = window.RuneTracePlayLog?.getConsent();
+if (storedPlayLogConsent === "granted") {
+  startPlayLogSession();
+  startFloor(1);
+  showIntroModal();
+} else {
+  startFloor(1, { logStart: false });
+  if (storedPlayLogConsent === "declined") {
+    showIntroModal();
+  } else {
+    showPlayLogConsentModal();
+  }
+}
