@@ -1,4 +1,4 @@
-const APP_VERSION = "0.0.7";
+const APP_VERSION = "0.0.8";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
@@ -6,7 +6,23 @@ const STAGES_PER_CHAPTER = 3;
 const FLOORS_PER_STAGE = 3;
 const TOTAL_FLOORS_PER_CHAPTER = STAGES_PER_CHAPTER * FLOORS_PER_STAGE;
 const EXPERIENCE_PER_LEVEL = 7;
-const DUMMY_ABILITIES = ["능력 1", "능력 2", "능력 3"];
+const COMBAT_ABILITIES = [
+  {
+    id: "temptation",
+    name: "유혹",
+    description: "새 룬에 이동이 막힌 적을 유인해 추가 처치",
+  },
+  {
+    id: "continuous-defeat",
+    name: "연속 격파",
+    description: "직접 2체 이상 처치 시 끝점과 가까운 적을 추가 처치",
+  },
+  {
+    id: "endpoint-slash",
+    name: "끝점 참격",
+    description: "룬 끝점의 진행 방향에 추가 공격 범위 생성",
+  },
+];
 
 const RUNE_TEMPLATES = [
   {
@@ -114,6 +130,8 @@ const state = {
   experience: 0,
   level: 1,
   abilities: [],
+  directDefeated: 0,
+  continuousDefeatUsed: false,
   floorStartExperience: 0,
   floorStartLevel: 1,
   floorStartAbilities: [],
@@ -135,6 +153,24 @@ const placementVariantCache = new Map();
 
 function cellKey(row, col) {
   return `${row}:${col}`;
+}
+
+function abilityById(abilityId) {
+  return COMBAT_ABILITIES.find((ability) => ability.id === abilityId);
+}
+
+function abilityLevel(abilityId) {
+  return state.abilities.filter((entry) => entry === abilityId).length;
+}
+
+function activeStandaloneAbility() {
+  const owned = COMBAT_ABILITIES
+    .map((ability) => ({
+      ...ability,
+      level: abilityLevel(ability.id),
+    }))
+    .filter((ability) => ability.level > 0);
+  return owned.length === 1 ? owned[0] : null;
 }
 
 function currentStage() {
@@ -376,9 +412,11 @@ function createStateSnapshot() {
       moveIntent: enemy.moveIntent ? { ...enemy.moveIntent } : null,
     })),
     defeated: state.defeated,
+    directDefeated: state.directDefeated,
     experience: state.experience,
     level: state.level,
     abilities: [...state.abilities],
+    continuousDefeatUsed: state.continuousDefeatUsed,
     pendingLevelUps: state.pendingLevelUps,
     pendingOutcome: state.pendingOutcome,
     running: state.running,
@@ -401,9 +439,11 @@ function restoreStateSnapshot(snapshot) {
     moveIntent: enemy.moveIntent ? { ...enemy.moveIntent } : null,
   }));
   state.defeated = snapshot.defeated;
+  state.directDefeated = snapshot.directDefeated;
   state.experience = snapshot.experience;
   state.level = snapshot.level;
   state.abilities = [...snapshot.abilities];
+  state.continuousDefeatUsed = snapshot.continuousDefeatUsed;
   state.pendingLevelUps = snapshot.pendingLevelUps;
   state.pendingOutcome = snapshot.pendingOutcome;
   state.running = snapshot.running;
@@ -437,6 +477,8 @@ function startFloor(floor, { retry = false } = {}) {
   state.drawing = false;
   state.pointerId = null;
   state.defeated = 0;
+  state.directDefeated = 0;
+  state.continuousDefeatUsed = false;
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
   state.history = [];
@@ -479,6 +521,8 @@ function restartChapter() {
   state.experience = 0;
   state.level = 1;
   state.abilities = [];
+  state.directDefeated = 0;
+  state.continuousDefeatUsed = false;
   state.pendingLevelUps = 0;
   state.pendingOutcome = null;
   startFloor(1);
@@ -504,6 +548,170 @@ function candidateRunesForPath(path) {
       path.length <= rune.points.length &&
       isRunePrefix(path, rune),
   );
+}
+
+function temptationTargets(path, survivors, level) {
+  const pathIndexByKey = new Map(
+    path.map(({ row, col }, index) => [cellKey(row, col), index]),
+  );
+  const start = path[0];
+  const end = path[path.length - 1];
+  const fullyHorizontal = path.every(({ row }) => row === start.row);
+  const finalRowDirection = Math.sign(
+    end.row - start.row || end.row - path[path.length - 2].row,
+  );
+
+  const candidates = survivors
+    .filter(
+      (enemy) =>
+        enemy.moveIntent &&
+        pathIndexByKey.has(
+          cellKey(enemy.moveIntent.row, enemy.moveIntent.col),
+        ),
+    )
+    .sort((a, b) => {
+      const aPathIndex = pathIndexByKey.get(
+        cellKey(a.moveIntent.row, a.moveIntent.col),
+      );
+      const bPathIndex = pathIndexByKey.get(
+        cellKey(b.moveIntent.row, b.moveIntent.col),
+      );
+      if (aPathIndex !== bPathIndex) return aPathIndex - bPathIndex;
+      if (a.col !== b.col) return a.col - b.col;
+      if (fullyHorizontal) return a.row - b.row;
+      if (finalRowDirection !== 0 && a.row !== b.row) {
+        return (b.row - a.row) * finalRowDirection;
+      }
+      return a.row - b.row || a.id.localeCompare(b.id);
+    });
+
+  return level >= 3 ? candidates : candidates.slice(0, level);
+}
+
+function continuousDefeatTargets(path, survivors, level, directCount) {
+  if (
+    directCount < 2 ||
+    state.continuousDefeatUsed ||
+    survivors.length < level
+  ) {
+    return [];
+  }
+  const endpoint = path[path.length - 1];
+  return [...survivors]
+    .sort((a, b) => {
+      const aDistance =
+        (a.col - endpoint.col) ** 2 + (a.row - endpoint.row) ** 2;
+      const bDistance =
+        (b.col - endpoint.col) ** 2 + (b.row - endpoint.row) ** 2;
+      return (
+        aDistance - bDistance ||
+        a.row - b.row ||
+        a.col - b.col ||
+        a.id.localeCompare(b.id)
+      );
+    })
+    .slice(0, level);
+}
+
+function endpointSlashCells(path, level) {
+  const endpoint = path[path.length - 1];
+  const previous = path[path.length - 2];
+  if (!endpoint || !previous) {
+    return [];
+  }
+
+  const rowDelta = endpoint.row - previous.row;
+  const colDelta = endpoint.col - previous.col;
+  let cells = [];
+
+  if (level === 1) {
+    cells = [{
+      row: endpoint.row + rowDelta,
+      col: endpoint.col + colDelta,
+    }];
+  } else if (level === 2) {
+    if (Math.abs(rowDelta) + Math.abs(colDelta) !== 1) {
+      return [];
+    }
+    const center = {
+      row: endpoint.row + rowDelta,
+      col: endpoint.col + colDelta,
+    };
+    cells = rowDelta === 0
+      ? [-1, 0, 1].map((offset) => ({
+          row: center.row + offset,
+          col: center.col,
+        }))
+      : [-1, 0, 1].map((offset) => ({
+          row: center.row,
+          col: center.col + offset,
+        }));
+  } else {
+    for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
+      for (let colOffset = -1; colOffset <= 1; colOffset += 1) {
+        const cell = {
+          row: endpoint.row + rowOffset,
+          col: endpoint.col + colOffset,
+        };
+        if (!sameCell(cell, endpoint) && !sameCell(cell, previous)) {
+          cells.push(cell);
+        }
+      }
+    }
+  }
+
+  return cells.filter(
+    ({ row, col }) =>
+      row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE,
+  );
+}
+
+function combatPreview(path) {
+  const directTargetIds = new Set(
+    state.enemies
+      .filter((enemy) =>
+        path.some((cell) => sameCell(cell, enemy)),
+      )
+      .map((enemy) => enemy.id),
+  );
+  const survivors = state.enemies.filter(
+    (enemy) => !directTargetIds.has(enemy.id),
+  );
+  const extraTargetIds = new Set();
+  const rangeKeys = new Set();
+  const ability = activeStandaloneAbility();
+  let continuousDefeatTriggered = false;
+
+  if (ability?.id === "temptation") {
+    temptationTargets(path, survivors, ability.level).forEach((enemy) => {
+      extraTargetIds.add(enemy.id);
+    });
+  } else if (ability?.id === "continuous-defeat") {
+    const targets = continuousDefeatTargets(
+      path,
+      survivors,
+      ability.level,
+      directTargetIds.size,
+    );
+    targets.forEach((enemy) => extraTargetIds.add(enemy.id));
+    continuousDefeatTriggered = targets.length === ability.level;
+  } else if (ability?.id === "endpoint-slash") {
+    endpointSlashCells(path, ability.level).forEach((cell) => {
+      rangeKeys.add(cellKey(cell.row, cell.col));
+    });
+    survivors.forEach((enemy) => {
+      if (rangeKeys.has(cellKey(enemy.row, enemy.col))) {
+        extraTargetIds.add(enemy.id);
+      }
+    });
+  }
+
+  return {
+    directTargetIds,
+    extraTargetIds,
+    rangeKeys,
+    continuousDefeatTriggered,
+  };
 }
 
 function miniRuneSvg(rune) {
@@ -610,14 +818,21 @@ function renderRunControls() {
     return;
   }
 
-  const counts = state.abilities.reduce((result, ability) => {
-    result.set(ability, (result.get(ability) ?? 0) + 1);
-    return result;
-  }, new Map());
-  refs.abilityList.innerHTML = [...counts]
+  const owned = COMBAT_ABILITIES
+    .map((ability) => ({
+      ...ability,
+      level: abilityLevel(ability.id),
+    }))
+    .filter((ability) => ability.level > 0);
+  refs.abilityList.innerHTML = owned
     .map(
-      ([ability, count]) =>
-        `<span>${ability}${count > 1 ? ` ×${count}` : ""}</span>`,
+      (ability) =>
+        `<span>${ability.name} LV.${ability.level}</span>`,
+    )
+    .concat(
+      owned.length > 1
+        ? '<span class="is-on-hold">복합 발동 보류</span>'
+        : [],
     )
     .join("");
 }
@@ -629,6 +844,16 @@ function renderBoard() {
   const currentKeys = new Set(
     state.currentPath.map(({ row, col }) => cellKey(row, col)),
   );
+  const completedPreviewRune = remainingRunes().find((rune) =>
+    matchesRune(state.currentPath, rune),
+  );
+  const preview = completedPreviewRune
+    ? combatPreview(state.currentPath)
+    : {
+        directTargetIds: new Set(),
+        extraTargetIds: new Set(),
+        rangeKeys: new Set(),
+      };
 
   const cells = [];
   for (let row = 0; row < BOARD_SIZE; row += 1) {
@@ -638,14 +863,22 @@ function renderBoard() {
       if (state.claimed.has(key)) classes.push("is-claimed");
       if (state.corrupted.has(key)) classes.push("is-corrupted");
       if (currentKeys.has(key)) classes.push("is-current");
+      if (preview.rangeKeys.has(key)) classes.push("is-ability-range");
       const enemy = enemiesByCell.get(key);
       const intent = enemy?.moveIntent;
+      const enemyClasses = ["enemy"];
+      if (preview.directTargetIds.has(enemy?.id)) {
+        enemyClasses.push("is-defeat-preview", "is-direct-preview");
+      }
+      if (preview.extraTargetIds.has(enemy?.id)) {
+        enemyClasses.push("is-defeat-preview", "is-ability-preview");
+      }
       cells.push(`
         <div class="${classes.join(" ")}">
           ${
             enemy
               ? `
-                <span class="enemy">
+                <span class="${enemyClasses.join(" ")}">
                   <span class="enemy-mark">◆</span>
                   <span class="enemy-intent${intent ? "" : " is-stopped"}">
                     ${
@@ -1020,6 +1253,7 @@ function resolveQueuedModal() {
 }
 
 function commitRune(rune, path) {
+  const preview = combatPreview(path);
   state.history.push(createStateSnapshot());
   const pathKeys = new Set(path.map(({ row, col }) => cellKey(row, col)));
   pathKeys.forEach((key) => state.claimed.add(key));
@@ -1031,12 +1265,20 @@ function commitRune(rune, path) {
   });
   state.currentPath = [];
 
-  const before = state.enemies.length;
+  const defeatedIds = new Set([
+    ...preview.directTargetIds,
+    ...preview.extraTargetIds,
+  ]);
   state.enemies = state.enemies.filter(
-    (enemy) => !pathKeys.has(cellKey(enemy.row, enemy.col)),
+    (enemy) => !defeatedIds.has(enemy.id),
   );
-  const defeatedNow = before - state.enemies.length;
-  state.defeated += defeatedNow;
+  const defeatedNow = preview.directTargetIds.size;
+  const abilityDefeatedNow = preview.extraTargetIds.size;
+  state.defeated += defeatedNow + abilityDefeatedNow;
+  state.directDefeated += defeatedNow;
+  if (preview.continuousDefeatTriggered) {
+    state.continuousDefeatUsed = true;
+  }
   grantExperience(defeatedNow);
 
   if (remainingRunes().length === 0) {
@@ -1047,7 +1289,7 @@ function commitRune(rune, path) {
         ? "stage-clear"
         : "floor-clear";
     setFeedback(
-      `네 개의 룬이 공명했습니다. 적 ${defeatedNow}체를 베고 EXP ${defeatedNow}을 얻었습니다.`,
+      `네 개의 룬이 공명했습니다. 직접 ${defeatedNow}체 · 능력 ${abilityDefeatedNow}체를 처치하고 EXP ${defeatedNow}을 얻었습니다.`,
       "success",
     );
     render();
@@ -1070,8 +1312,8 @@ function commitRune(rune, path) {
   }
 
   const killCopy =
-    defeatedNow > 0
-      ? `적 ${defeatedNow}체 제거 · EXP +${defeatedNow}, `
+    defeatedNow + abilityDefeatedNow > 0
+      ? `직접 ${defeatedNow}체 · 능력 ${abilityDefeatedNow}체 제거 · EXP +${defeatedNow}, `
       : "";
   setFeedback(
     `${rune.name} 완성! ${killCopy}빈 칸 ${corruptedNow}곳이 오염됐습니다.`,
@@ -1152,16 +1394,20 @@ function showLevelUpSelection() {
   window.setTimeout(() => refs.modalPanel.focus(), 0);
 }
 
-function completeLevelUp(ability = null) {
+function completeLevelUp(abilityId = null) {
   const resolvedLevel = state.level - state.pendingLevelUps + 1;
-  if (ability) {
-    state.abilities.push(ability);
+  const ability = abilityById(abilityId);
+  const previousAbilityLevel = ability ? abilityLevel(ability.id) : 0;
+  if (ability && previousAbilityLevel < 3) {
+    state.abilities.push(ability.id);
   }
   state.pendingLevelUps = Math.max(0, state.pendingLevelUps - 1);
   closeModal();
   setFeedback(
     ability
-      ? `LEVEL ${resolvedLevel} · ${ability}을 획득했습니다.`
+      ? previousAbilityLevel < 3
+        ? `LEVEL ${resolvedLevel} · ${ability.name} LV.${previousAbilityLevel + 1}`
+        : `LEVEL ${resolvedLevel} · ${ability.name}은 이미 최대 단계입니다.`
       : `LEVEL ${resolvedLevel} · 능력 선택을 건너뛰었습니다.`,
     "success",
   );
@@ -1188,6 +1434,7 @@ function rulesMarkup() {
         <div class="rule"><b>3</b><span>몬스터 안의 화살표는 다음 이동 방향이며, 자물쇠는 정지를 뜻합니다.</span></div>
         <div class="rule"><b>4</b><span>완성 룬과 오염 칸은 다시 쓸 수 없습니다. 네 룬의 자리를 남겨두세요.</span></div>
       </div>
+      <p>룬 경로로 직접 처치한 적만 EXP를 주며, 능력 추가 처치는 섬멸 수에만 포함됩니다.</p>
       <p>한 챕터는 3개 스테이지, 각 스테이지는 3개 플로어입니다. EXP ${EXPERIENCE_PER_LEVEL}마다 레벨이 오릅니다.</p>
     `;
 }
@@ -1226,15 +1473,18 @@ function showHelpModal() {
 
 function showLevelUpModal() {
   const targetLevel = state.level - state.pendingLevelUps + 1;
+  const ownedKinds = COMBAT_ABILITIES.filter(
+    (ability) => abilityLevel(ability.id) > 0,
+  ).length;
   openModal({
     type: "levelup",
     eyebrow: `LEVEL ${targetLevel} REACHED`,
     title: "능력을 하나<br>선택하세요",
     body: `
-      <p>능력 효과는 아직 정하지 않았습니다. 이번 프로토타입에서는 획득 기록만 남습니다.</p>
+      <p>같은 능력을 다시 선택하면 최대 3단계까지 강화됩니다. 서로 다른 능력을 함께 보유하면 복합 발동은 현재 보류됩니다.</p>
       <div class="level-preview">
         <span>현재 레벨</span>
-        <strong>LV ${targetLevel}</strong>
+        <strong>LV ${targetLevel}${ownedKinds > 1 ? " · 복합 보류" : ""}</strong>
       </div>
     `,
     actions: [
@@ -1243,10 +1493,20 @@ function showLevelUpModal() {
         onClick: showLevelUpBoard,
         className: "review-board-action",
       },
-      ...DUMMY_ABILITIES.map((ability) => ({
-        label: ability,
-        onClick: () => completeLevelUp(ability),
-      })),
+      ...COMBAT_ABILITIES.map((ability) => {
+        const currentLevel = abilityLevel(ability.id);
+        return {
+          label: `${ability.name} · ${
+            currentLevel >= 3
+              ? "MAX"
+              : currentLevel === 0
+                ? "획득"
+                : `LV.${currentLevel} → LV.${currentLevel + 1}`
+          }`,
+          onClick: () => completeLevelUp(ability.id),
+          className: `ability-action ability-${ability.id}`,
+        };
+      }),
     ],
   });
 }
@@ -1256,7 +1516,7 @@ function floorResultMarkup() {
     <p>적을 모두 쓰러뜨리지 않아도 네 개의 궤적이 탑의 문을 열었습니다.</p>
     <div class="result-grid">
       <div><span>처치</span><strong>${state.defeated}</strong></div>
-      <div><span>획득 EXP</span><strong>+${state.defeated}</strong></div>
+      <div><span>획득 EXP</span><strong>+${state.directDefeated}</strong></div>
       <div><span>생존 적</span><strong>${state.enemies.length}</strong></div>
     </div>
   `;
@@ -1371,7 +1631,7 @@ function showFailModal() {
       <p>살아남은 적의 오염이 남은 룬 경로를 막았습니다. 룬으로 적을 더 많이 베거나, 완성 경로의 위치를 바꿔보세요.</p>
       <div class="result-grid">
         <div><span>완성 룬</span><strong>${state.completedPaths.length}</strong></div>
-        <div><span>획득 EXP</span><strong>+${state.defeated}</strong></div>
+        <div><span>획득 EXP</span><strong>+${state.directDefeated}</strong></div>
         <div><span>오염 칸</span><strong>${state.corrupted.size}</strong></div>
       </div>
     `,

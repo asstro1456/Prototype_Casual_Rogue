@@ -473,6 +473,18 @@ body {
   transform: rotate(45deg);
 }
 
+.grid-cell.is-ability-range::after {
+  position: absolute;
+  inset: 3px;
+  z-index: 2;
+  content: "";
+  border: 1px solid rgba(255, 205, 112, .9);
+  border-radius: 7px;
+  background: rgba(255, 182, 92, .08);
+  box-shadow: inset 0 0 10px rgba(255, 178, 82, .18);
+  pointer-events: none;
+}
+
 .enemy {
   position: absolute;
   z-index: 4;
@@ -487,6 +499,18 @@ body {
   font-weight: 1000;
   background: linear-gradient(145deg, #ffe0a5, #ff7f78 64%, #a8426f);
   box-shadow: 0 5px 12px rgba(1, 6, 19, .42), 0 0 12px rgba(255, 125, 116, .44);
+  transition: opacity .14s ease, filter .14s ease;
+}
+
+.enemy.is-defeat-preview {
+  opacity: .28;
+  filter: grayscale(.45);
+}
+
+.enemy.is-ability-preview {
+  box-shadow:
+    0 0 0 2px rgba(255, 220, 130, .72),
+    0 0 16px rgba(255, 172, 91, .48);
 }
 
 .enemy::before,
@@ -786,6 +810,12 @@ body {
   border-radius: 20px;
   color: #85bed4;
   background: rgba(27, 67, 91, .35);
+}
+
+.ability-list .is-on-hold {
+  border-color: rgba(255, 194, 118, .18);
+  color: #caa778;
+  background: rgba(92, 61, 28, .3);
 }
 
 .modal-backdrop {
