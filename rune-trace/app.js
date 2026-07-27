@@ -1,8 +1,11 @@
-const APP_VERSION = "0.0.6";
+const APP_VERSION = "0.0.7";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;
-const EXPERIENCE_PER_LEVEL = 3;
+const STAGES_PER_CHAPTER = 3;
+const FLOORS_PER_STAGE = 3;
+const TOTAL_FLOORS_PER_CHAPTER = STAGES_PER_CHAPTER * FLOORS_PER_STAGE;
+const EXPERIENCE_PER_LEVEL = 7;
 const DUMMY_ABILITIES = ["능력 1", "능력 2", "능력 3"];
 
 const RUNE_TEMPLATES = [
@@ -45,6 +48,16 @@ const RUNE_TEMPLATES = [
 ];
 
 const RUNE_COLORS = ["#72e1ff", "#9ba8ff", "#78e7be", "#ffd27c"];
+const MOVE_DIRECTIONS = [
+  { rowDelta: -1, colDelta: -1, arrow: "↖" },
+  { rowDelta: -1, colDelta: 0, arrow: "↑" },
+  { rowDelta: -1, colDelta: 1, arrow: "↗" },
+  { rowDelta: 0, colDelta: -1, arrow: "←" },
+  { rowDelta: 0, colDelta: 1, arrow: "→" },
+  { rowDelta: 1, colDelta: -1, arrow: "↙" },
+  { rowDelta: 1, colDelta: 0, arrow: "↓" },
+  { rowDelta: 1, colDelta: 1, arrow: "↘" },
+];
 const TRANSFORMS = [
   ([x, y]) => [x, y],
   ([x, y]) => [-x, y],
@@ -57,7 +70,9 @@ const TRANSFORMS = [
 ];
 
 const refs = {
+  floorContext: document.querySelector("#floorContext"),
   floorDisplay: document.querySelector("#floorDisplay"),
+  chapterProgress: document.querySelector("#chapterProgress"),
   runeProgress: document.querySelector("#runeProgress"),
   levelCount: document.querySelector("#levelCount"),
   enemyCount: document.querySelector("#enemyCount"),
@@ -82,6 +97,7 @@ const refs = {
   modalTitle: document.querySelector("#modalTitle"),
   modalBody: document.querySelector("#modalBody"),
   modalActions: document.querySelector("#modalActions"),
+  levelUpResumeButton: document.querySelector("#levelUpResumeButton"),
 };
 
 const state = {
@@ -101,12 +117,16 @@ const state = {
   floorStartExperience: 0,
   floorStartLevel: 1,
   floorStartAbilities: [],
+  stageStartExperience: 0,
+  stageStartLevel: 1,
+  stageStartAbilities: [],
   pendingLevelUps: 0,
   pendingOutcome: null,
   history: [],
   floorInitialSnapshot: null,
   running: true,
   modalType: "intro",
+  levelUpReviewingBoard: false,
 };
 
 const pathVariantCache = new Map();
@@ -115,6 +135,22 @@ const placementVariantCache = new Map();
 
 function cellKey(row, col) {
   return `${row}:${col}`;
+}
+
+function currentStage() {
+  return Math.floor((state.floor - 1) / FLOORS_PER_STAGE) + 1;
+}
+
+function currentFloorInStage() {
+  return ((state.floor - 1) % FLOORS_PER_STAGE) + 1;
+}
+
+function isStageFinalFloor() {
+  return currentFloorInStage() === FLOORS_PER_STAGE;
+}
+
+function isChapterFinalFloor() {
+  return state.floor === TOTAL_FLOORS_PER_CHAPTER;
 }
 
 function shuffle(values) {
@@ -283,7 +319,44 @@ function spawnEnemies() {
   state.enemies = positions.map((position, index) => ({
     id: `${state.floor}-enemy-${index}`,
     ...position,
+    moveIntent: null,
   }));
+}
+
+function planEnemyMoves() {
+  const occupied = new Set(
+    state.enemies.map((enemy) => cellKey(enemy.row, enemy.col)),
+  );
+  const reserved = new Set();
+
+  shuffle(state.enemies).forEach((enemy) => {
+    const candidates = MOVE_DIRECTIONS
+      .map(({ rowDelta, colDelta, arrow }) => {
+        const row = enemy.row + rowDelta;
+        const col = enemy.col + colDelta;
+        return { row, col, rowDelta, colDelta, arrow };
+      })
+      .filter(({ row, col }) => {
+        const key = cellKey(row, col);
+        return (
+          row >= 0 &&
+          row < BOARD_SIZE &&
+          col >= 0 &&
+          col < BOARD_SIZE &&
+          !state.claimed.has(key) &&
+          !state.corrupted.has(key) &&
+          !occupied.has(key) &&
+          !reserved.has(key)
+        );
+      });
+
+    const destination =
+      candidates[Math.floor(Math.random() * candidates.length)] ?? null;
+    enemy.moveIntent = destination;
+    if (destination) {
+      reserved.add(cellKey(destination.row, destination.col));
+    }
+  });
 }
 
 function createStateSnapshot() {
@@ -298,7 +371,10 @@ function createStateSnapshot() {
     })),
     claimed: [...state.claimed],
     corrupted: [...state.corrupted],
-    enemies: state.enemies.map((enemy) => ({ ...enemy })),
+    enemies: state.enemies.map((enemy) => ({
+      ...enemy,
+      moveIntent: enemy.moveIntent ? { ...enemy.moveIntent } : null,
+    })),
     defeated: state.defeated,
     experience: state.experience,
     level: state.level,
@@ -320,7 +396,10 @@ function restoreStateSnapshot(snapshot) {
   }));
   state.claimed = new Set(snapshot.claimed);
   state.corrupted = new Set(snapshot.corrupted);
-  state.enemies = snapshot.enemies.map((enemy) => ({ ...enemy }));
+  state.enemies = snapshot.enemies.map((enemy) => ({
+    ...enemy,
+    moveIntent: enemy.moveIntent ? { ...enemy.moveIntent } : null,
+  }));
   state.defeated = snapshot.defeated;
   state.experience = snapshot.experience;
   state.level = snapshot.level;
@@ -328,6 +407,7 @@ function restoreStateSnapshot(snapshot) {
   state.pendingLevelUps = snapshot.pendingLevelUps;
   state.pendingOutcome = snapshot.pendingOutcome;
   state.running = snapshot.running;
+  state.levelUpReviewingBoard = false;
   state.currentPath = [];
   state.drawing = false;
   state.pointerId = null;
@@ -344,6 +424,11 @@ function startFloor(floor, { retry = false } = {}) {
     state.floorStartAbilities = [...state.abilities];
   }
   state.floor = floor;
+  if (currentFloorInStage() === 1) {
+    state.stageStartExperience = state.experience;
+    state.stageStartLevel = state.level;
+    state.stageStartAbilities = [...state.abilities];
+  }
   state.runes = chooseRunes();
   state.completedPaths = [];
   state.claimed = new Set();
@@ -357,6 +442,7 @@ function startFloor(floor, { retry = false } = {}) {
   state.history = [];
   state.running = true;
   spawnEnemies();
+  planEnemyMoves();
   state.floorInitialSnapshot = createStateSnapshot();
   setFeedback("목록에 있는 룬을 판 위에 바로 그리세요.");
   render();
@@ -387,6 +473,25 @@ function resetFloor() {
   state.pendingOutcome = null;
   setFeedback("현재 층을 최초 배치로 초기화했습니다.");
   render();
+}
+
+function restartChapter() {
+  state.experience = 0;
+  state.level = 1;
+  state.abilities = [];
+  state.pendingLevelUps = 0;
+  state.pendingOutcome = null;
+  startFloor(1);
+}
+
+function restartStage() {
+  const firstFloor = (currentStage() - 1) * FLOORS_PER_STAGE + 1;
+  state.experience = state.stageStartExperience;
+  state.level = state.stageStartLevel;
+  state.abilities = [...state.stageStartAbilities];
+  state.pendingLevelUps = 0;
+  state.pendingOutcome = null;
+  startFloor(firstFloor);
 }
 
 function remainingRunes() {
@@ -437,7 +542,14 @@ function renderStatus() {
   const complete = state.runes.filter((rune) => rune.complete).length;
   const levelExperience =
     state.experience - (state.level - 1) * EXPERIENCE_PER_LEVEL;
-  refs.floorDisplay.textContent = `FLOOR ${String(state.floor).padStart(2, "0")}`;
+  const stage = currentStage();
+  const floor = currentFloorInStage();
+  const currentFloorComplete =
+    !state.running &&
+    state.runes.length > 0 &&
+    remainingRunes().length === 0;
+  refs.floorContext.textContent = `CHAPTER 01 · STAGE ${stage}`;
+  refs.floorDisplay.textContent = `FLOOR ${floor} / ${FLOORS_PER_STAGE}`;
   refs.levelCount.textContent = String(state.level);
   refs.enemyCount.textContent = String(state.enemies.length);
   refs.experienceCount.textContent = `${levelExperience} / ${EXPERIENCE_PER_LEVEL}`;
@@ -449,6 +561,37 @@ function renderStatus() {
     { length: RUNES_PER_FLOOR },
     (_, index) => `<i class="${index < complete ? "is-complete" : ""}"></i>`,
   ).join("");
+  refs.chapterProgress.innerHTML = Array.from(
+    { length: STAGES_PER_CHAPTER },
+    (_, stageIndex) => {
+      const stageNumber = stageIndex + 1;
+      const floors = Array.from(
+        { length: FLOORS_PER_STAGE },
+        (_, floorIndex) => {
+          const floorNumber = floorIndex + 1;
+          const absoluteFloor = stageIndex * FLOORS_PER_STAGE + floorNumber;
+          const status =
+            absoluteFloor < state.floor ||
+            (absoluteFloor === state.floor && currentFloorComplete)
+              ? "is-complete"
+              : absoluteFloor === state.floor
+                ? "is-current"
+                : "";
+          return `
+            <i class="${status}" aria-label="스테이지 ${stageNumber} 플로어 ${floorNumber}">
+              ${floorNumber}
+            </i>
+          `;
+        },
+      ).join("");
+      return `
+        <div class="stage-row${stageNumber === stage ? " is-current" : ""}">
+          <strong>STAGE ${stageNumber}</strong>
+          <div class="stage-floor-row">${floors}</div>
+        </div>
+      `;
+    },
+  ).join("");
 
   refs.turnLabel.textContent = "자동 룬 인식";
   refs.boardGoal.textContent =
@@ -458,8 +601,9 @@ function renderStatus() {
 }
 
 function renderRunControls() {
-  refs.undoButton.disabled = state.history.length === 0;
-  refs.resetButton.disabled = !state.floorInitialSnapshot;
+  const levelUpPending = state.modalType === "levelup";
+  refs.undoButton.disabled = levelUpPending || state.history.length === 0;
+  refs.resetButton.disabled = levelUpPending || !state.floorInitialSnapshot;
 
   if (state.abilities.length === 0) {
     refs.abilityList.textContent = "획득 능력 없음";
@@ -495,9 +639,25 @@ function renderBoard() {
       if (state.corrupted.has(key)) classes.push("is-corrupted");
       if (currentKeys.has(key)) classes.push("is-current");
       const enemy = enemiesByCell.get(key);
+      const intent = enemy?.moveIntent;
       cells.push(`
         <div class="${classes.join(" ")}">
-          ${enemy ? '<span class="enemy">◆</span>' : ""}
+          ${
+            enemy
+              ? `
+                <span class="enemy">
+                  <span class="enemy-mark">◆</span>
+                  <span class="enemy-intent${intent ? "" : " is-stopped"}">
+                    ${
+                      intent
+                        ? intent.arrow
+                        : '<img class="enemy-stop-icon" src="./assets/stop-intent-lock.png" alt="" aria-hidden="true">'
+                    }
+                  </span>
+                </span>
+              `
+              : ""
+          }
         </div>
       `);
     }
@@ -704,6 +864,12 @@ function appendDrawingCell(cell) {
 }
 
 function beginDrawing(event) {
+  if (state.modalType === "levelup") {
+    if (state.levelUpReviewingBoard) {
+      showLevelUpSelection();
+    }
+    return;
+  }
   if (!state.running || state.drawing || remainingRunes().length === 0) {
     return;
   }
@@ -759,35 +925,24 @@ function finishDrawing(event) {
 }
 
 function moveEnemies() {
-  const occupied = new Set(state.enemies.map((enemy) => cellKey(enemy.row, enemy.col)));
-  shuffle(state.enemies).forEach((enemy) => {
-    occupied.delete(cellKey(enemy.row, enemy.col));
-    const candidates = [];
-    for (let rowDelta = -1; rowDelta <= 1; rowDelta += 1) {
-      for (let colDelta = -1; colDelta <= 1; colDelta += 1) {
-        if (rowDelta === 0 && colDelta === 0) continue;
-        const row = enemy.row + rowDelta;
-        const col = enemy.col + colDelta;
-        const key = cellKey(row, col);
-        if (
-          row >= 0 &&
-          row < BOARD_SIZE &&
-          col >= 0 &&
-          col < BOARD_SIZE &&
-          !state.claimed.has(key) &&
-          !state.corrupted.has(key) &&
-          !occupied.has(key)
-        ) {
-          candidates.push({ row, col });
-        }
-      }
+  state.enemies.forEach((enemy) => {
+    const destination = enemy.moveIntent;
+    if (!destination) {
+      return;
     }
-    const destination = candidates[Math.floor(Math.random() * candidates.length)];
-    if (destination) {
-      enemy.row = destination.row;
-      enemy.col = destination.col;
+
+    const destinationKey = cellKey(destination.row, destination.col);
+    if (
+      state.claimed.has(destinationKey) ||
+      state.corrupted.has(destinationKey)
+    ) {
+      enemy.moveIntent = null;
+      return;
     }
-    occupied.add(cellKey(enemy.row, enemy.col));
+
+    enemy.row = destination.row;
+    enemy.col = destination.col;
+    enemy.moveIntent = null;
   });
 }
 
@@ -838,13 +993,24 @@ function grantExperience(amount) {
 }
 
 function resolveQueuedModal() {
+  if (state.pendingOutcome === "chapter-clear") {
+    state.pendingLevelUps = 0;
+    state.pendingOutcome = null;
+    showChapterClearModal();
+    return;
+  }
   if (state.pendingLevelUps > 0) {
     showLevelUpModal();
     return;
   }
-  if (state.pendingOutcome === "clear") {
+  if (state.pendingOutcome === "floor-clear") {
     state.pendingOutcome = null;
-    showClearModal();
+    showFloorClearModal();
+    return;
+  }
+  if (state.pendingOutcome === "stage-clear") {
+    state.pendingOutcome = null;
+    showStageClearModal();
     return;
   }
   if (state.pendingOutcome === "fail") {
@@ -875,7 +1041,11 @@ function commitRune(rune, path) {
 
   if (remainingRunes().length === 0) {
     state.running = false;
-    state.pendingOutcome = "clear";
+    state.pendingOutcome = isChapterFinalFloor()
+      ? "chapter-clear"
+      : isStageFinalFloor()
+        ? "stage-clear"
+        : "floor-clear";
     setFeedback(
       `네 개의 룬이 공명했습니다. 적 ${defeatedNow}체를 베고 EXP ${defeatedNow}을 얻었습니다.`,
       "success",
@@ -887,6 +1057,7 @@ function commitRune(rune, path) {
 
   moveEnemies();
   const corruptedNow = corruptCells();
+  planEnemyMoves();
 
   const fittingRunes = remainingRunes().filter((entry) => canTemplateFit(entry));
   if (fittingRunes.length === 0) {
@@ -912,11 +1083,12 @@ function commitRune(rune, path) {
   }
 }
 
-function makeAction(label, onClick, primary = false) {
+function makeAction(label, onClick, primary = false, className = "") {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = label;
   if (primary) button.classList.add("primary");
+  if (className) button.classList.add(className);
   button.addEventListener("click", onClick);
   return button;
 }
@@ -930,9 +1102,21 @@ function openModal({ type, eyebrow, title, body, actions }) {
   refs.modalActions.innerHTML = "";
   actions.forEach((action) => {
     refs.modalActions.append(
-      makeAction(action.label, action.onClick, action.primary),
+      makeAction(
+        action.label,
+        action.onClick,
+        action.primary,
+        action.className,
+      ),
     );
   });
+  refs.modalClose.setAttribute(
+    "aria-label",
+    type === "levelup" ? "보드 보기" : "모달 닫기",
+  );
+  refs.modalClose.hidden = !["intro", "help", "levelup"].includes(type);
+  state.levelUpReviewingBoard = false;
+  refs.levelUpResumeButton.hidden = true;
   refs.modalBackdrop.classList.add("is-open");
   window.setTimeout(() => refs.modalPanel.focus(), 0);
 }
@@ -941,7 +1125,31 @@ function closeModal() {
   refs.modalBackdrop.classList.remove("is-open");
   refs.modalPanel.dataset.modalType = "";
   state.modalType = null;
+  state.levelUpReviewingBoard = false;
+  refs.levelUpResumeButton.hidden = true;
+  refs.modalClose.hidden = false;
   refs.helpButton.focus({ preventScroll: true });
+}
+
+function showLevelUpBoard() {
+  if (state.modalType !== "levelup") {
+    return;
+  }
+  state.levelUpReviewingBoard = true;
+  refs.modalBackdrop.classList.remove("is-open");
+  refs.levelUpResumeButton.hidden = false;
+  renderRunControls();
+  refs.levelUpResumeButton.focus({ preventScroll: true });
+}
+
+function showLevelUpSelection() {
+  if (state.modalType !== "levelup") {
+    return;
+  }
+  state.levelUpReviewingBoard = false;
+  refs.levelUpResumeButton.hidden = true;
+  refs.modalBackdrop.classList.add("is-open");
+  window.setTimeout(() => refs.modalPanel.focus(), 0);
 }
 
 function completeLevelUp(ability = null) {
@@ -963,23 +1171,25 @@ function completeLevelUp(ability = null) {
 
 function requestModalClose() {
   if (state.modalType === "levelup") {
-    completeLevelUp();
+    showLevelUpBoard();
     return;
   }
-  closeModal();
+  if (state.modalType === "intro" || state.modalType === "help") {
+    closeModal();
+  }
 }
 
 function rulesMarkup() {
   return `
     <p>적을 전부 쓰러뜨리는 대신, <strong>제시된 룬 네 개를 모두 그리면</strong> 층을 통과합니다.</p>
-    <div class="rule-list">
-      <div class="rule"><b>1</b><span>왼쪽 목록의 룬 중 하나를 그리면 자동으로 인식됩니다.</span></div>
-      <div class="rule"><b>2</b><span>룬은 회전·좌우 반전 가능하며, 지나간 적을 처치하면 EXP를 얻습니다.</span></div>
-      <div class="rule"><b>3</b><span>살아남은 적은 이동하고 최대 3개의 빈 칸을 오염시킵니다.</span></div>
-      <div class="rule"><b>4</b><span>완성 룬과 오염 칸은 다시 쓸 수 없습니다. 네 룬의 자리를 남겨두세요.</span></div>
-    </div>
-    <p>EXP ${EXPERIENCE_PER_LEVEL}마다 레벨이 오릅니다. 막혔다면 한 수를 되돌리거나 층을 초기화할 수 있습니다.</p>
-  `;
+      <div class="rule-list">
+        <div class="rule"><b>1</b><span>왼쪽 목록의 룬 중 하나를 그리면 자동으로 인식됩니다.</span></div>
+        <div class="rule"><b>2</b><span>룬은 회전·좌우 반전 가능하며, 지나간 적을 처치하면 EXP를 얻습니다.</span></div>
+        <div class="rule"><b>3</b><span>몬스터 안의 화살표는 다음 이동 방향이며, 자물쇠는 정지를 뜻합니다.</span></div>
+        <div class="rule"><b>4</b><span>완성 룬과 오염 칸은 다시 쓸 수 없습니다. 네 룬의 자리를 남겨두세요.</span></div>
+      </div>
+      <p>한 챕터는 3개 스테이지, 각 스테이지는 3개 플로어입니다. EXP ${EXPERIENCE_PER_LEVEL}마다 레벨이 오릅니다.</p>
+    `;
 }
 
 function showIntroModal() {
@@ -1001,7 +1211,7 @@ function showIntroModal() {
 function showHelpModal() {
   openModal({
     type: "help",
-    eyebrow: `FLOOR ${String(state.floor).padStart(2, "0")} · GUIDE`,
+    eyebrow: `STAGE ${currentStage()} · FLOOR ${currentFloorInStage()} · GUIDE`,
     title: "룬을 그리는 법",
     body: rulesMarkup(),
     actions: [
@@ -1027,26 +1237,37 @@ function showLevelUpModal() {
         <strong>LV ${targetLevel}</strong>
       </div>
     `,
-    actions: DUMMY_ABILITIES.map((ability) => ({
-      label: ability,
-      onClick: () => completeLevelUp(ability),
-    })),
+    actions: [
+      {
+        label: "보드 보기",
+        onClick: showLevelUpBoard,
+        className: "review-board-action",
+      },
+      ...DUMMY_ABILITIES.map((ability) => ({
+        label: ability,
+        onClick: () => completeLevelUp(ability),
+      })),
+    ],
   });
 }
 
-function showClearModal() {
+function floorResultMarkup() {
+  return `
+    <p>적을 모두 쓰러뜨리지 않아도 네 개의 궤적이 탑의 문을 열었습니다.</p>
+    <div class="result-grid">
+      <div><span>처치</span><strong>${state.defeated}</strong></div>
+      <div><span>획득 EXP</span><strong>+${state.defeated}</strong></div>
+      <div><span>생존 적</span><strong>${state.enemies.length}</strong></div>
+    </div>
+  `;
+}
+
+function showFloorClearModal() {
   openModal({
     type: "clear",
     eyebrow: "FLOOR CLEAR",
     title: "룬이 공명했습니다",
-    body: `
-      <p>적을 모두 쓰러뜨리지 않아도 네 개의 궤적이 탑의 문을 열었습니다.</p>
-      <div class="result-grid">
-        <div><span>처치</span><strong>${state.defeated}</strong></div>
-        <div><span>획득 EXP</span><strong>+${state.defeated}</strong></div>
-        <div><span>생존 적</span><strong>${state.enemies.length}</strong></div>
-      </div>
-    `,
+    body: floorResultMarkup(),
     actions: [
       {
         label: "이 층 다시",
@@ -1067,7 +1288,81 @@ function showClearModal() {
   });
 }
 
+function showStageClearModal() {
+  openModal({
+    type: "stage-clear",
+    eyebrow: `STAGE ${currentStage()} CLEAR`,
+    title: "스테이지를<br>돌파했습니다",
+    body: `
+      ${floorResultMarkup()}
+      <p>현재 성장 상태를 유지한 채 다음 스테이지로 이어집니다.</p>
+    `,
+    actions: [
+      {
+        label: "스테이지 재도전",
+        onClick: () => {
+          closeModal();
+          restartStage();
+        },
+      },
+      {
+        label: "다음 스테이지",
+        primary: true,
+        onClick: () => {
+          closeModal();
+          startFloor(state.floor + 1);
+        },
+      },
+    ],
+  });
+}
+
+function showChapterClearModal() {
+  openModal({
+    type: "chapter-clear",
+    eyebrow: "CHAPTER 01 CLEAR",
+    title: "첫 챕터의<br>정상에 올랐습니다",
+    body: `
+      <p>마지막 턴에서 남은 레벨업 선택은 생략하고 챕터를 종료했습니다.</p>
+      <div class="result-grid">
+        <div><span>완료 스테이지</span><strong>${STAGES_PER_CHAPTER}</strong></div>
+        <div><span>완료 플로어</span><strong>${TOTAL_FLOORS_PER_CHAPTER}</strong></div>
+        <div><span>최종 레벨</span><strong>${state.level}</strong></div>
+      </div>
+    `,
+    actions: [
+      {
+        label: "챕터 재도전",
+        primary: true,
+        onClick: () => {
+          closeModal();
+          restartChapter();
+        },
+      },
+    ],
+  });
+}
+
 function showFailModal() {
+  const actions = [];
+  if (currentStage() <= 2) {
+    actions.push({
+      label: "스테이지 재도전",
+      onClick: () => {
+        closeModal();
+        restartStage();
+      },
+    });
+  }
+  actions.push({
+    label: "플로어 초기화",
+    primary: true,
+    onClick: () => {
+      closeModal();
+      resetFloor();
+    },
+  });
+
   openModal({
     type: "fail",
     eyebrow: "RUNE SPACE LOST",
@@ -1080,16 +1375,7 @@ function showFailModal() {
         <div><span>오염 칸</span><strong>${state.corrupted.size}</strong></div>
       </div>
     `,
-    actions: [
-      {
-        label: "이 층 다시",
-        primary: true,
-        onClick: () => {
-          closeModal();
-          resetFloor();
-        },
-      },
-    ],
+    actions,
   });
 }
 
@@ -1103,8 +1389,20 @@ refs.board.addEventListener("lostpointercapture", () => {
 
 refs.undoButton.addEventListener("click", undoLastRune);
 refs.resetButton.addEventListener("click", resetFloor);
-refs.helpButton.addEventListener("click", showHelpModal);
+refs.helpButton.addEventListener("click", () => {
+  if (state.modalType === "levelup") {
+    showLevelUpSelection();
+    return;
+  }
+  showHelpModal();
+});
 refs.modalClose.addEventListener("click", requestModalClose);
+refs.levelUpResumeButton.addEventListener("click", showLevelUpSelection);
+refs.modalBackdrop.addEventListener("click", (event) => {
+  if (event.target === refs.modalBackdrop && state.modalType === "levelup") {
+    showLevelUpBoard();
+  }
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && refs.modalBackdrop.classList.contains("is-open")) {
     requestModalClose();

@@ -189,6 +189,67 @@ body {
   color: #e9f8ff;
 }
 
+.chapter-map {
+  padding: 16px 18px 18px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(9, 23, 45, .82);
+}
+
+.chapter-progress {
+  display: grid;
+  gap: 30px;
+}
+
+.stage-row {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+  color: #617793;
+}
+
+.stage-row strong {
+  font-size: 9px;
+  letter-spacing: .13em;
+}
+
+.stage-row.is-current strong {
+  color: #8de5ff;
+}
+
+.stage-floor-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+}
+
+.stage-floor-row i {
+  display: grid;
+  min-height: 28px;
+  border: 1px solid rgba(146, 198, 230, .13);
+  border-radius: 9px;
+  place-items: center;
+  color: #5e7693;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+  background: rgba(13, 32, 60, .72);
+}
+
+.stage-floor-row i.is-complete {
+  border-color: rgba(109, 220, 183, .28);
+  color: #70d9ad;
+  background: rgba(28, 86, 70, .3);
+}
+
+.stage-floor-row i.is-current {
+  border-color: rgba(118, 222, 255, .7);
+  color: #e5faff;
+  background: rgba(47, 126, 166, .46);
+  box-shadow: 0 0 16px rgba(72, 198, 241, .2);
+}
+
 .tower-scene {
   position: relative;
   min-height: 500px;
@@ -447,6 +508,35 @@ body {
 .enemy::after {
   right: 4%;
   transform: scaleX(-1) rotate(-28deg);
+}
+
+.enemy-mark {
+  opacity: .25;
+  transform: scale(.68);
+}
+
+.enemy-intent {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  color: #fff7e7;
+  font-size: clamp(13px, 3.2vw, 18px);
+  line-height: 1;
+  text-shadow: 0 1px 4px rgba(58, 13, 28, .7);
+}
+
+.enemy-intent.is-stopped {
+  overflow: hidden;
+  border-radius: 5px;
+}
+
+.enemy-stop-icon {
+  display: block;
+  width: 74%;
+  height: 74%;
+  object-fit: contain;
 }
 
 .path-layer {
@@ -713,6 +803,34 @@ body {
   display: grid;
 }
 
+.levelup-resume {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 19;
+  min-height: 46px;
+  padding: 0 22px;
+  border: 1px solid #7bdfff;
+  border-radius: 14px;
+  color: #082137;
+  font-size: 12px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #a2efff, #5bc9f3);
+  box-shadow: 0 15px 42px rgba(0, 8, 24, .52);
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+
+.levelup-resume[hidden] {
+  display: none;
+}
+
+.levelup-resume:hover,
+.levelup-resume:focus-visible {
+  outline: none;
+  filter: brightness(1.08);
+}
+
 .modal-panel {
   position: relative;
   width: min(100%, 430px);
@@ -744,6 +862,10 @@ body {
   right: 13px;
   width: 34px;
   font-size: 20px;
+}
+
+.modal-close[hidden] {
+  display: none;
 }
 
 .modal-eyebrow {
@@ -866,6 +988,14 @@ body {
   background: linear-gradient(135deg, rgba(37, 81, 112, .8), rgba(20, 43, 76, .86));
 }
 
+.modal-panel[data-modal-type="levelup"] .modal-actions .review-board-action {
+  min-height: 40px;
+  border-color: rgba(141, 187, 217, .15);
+  color: #8da4ba;
+  font-size: 10px;
+  background: rgba(8, 22, 43, .65);
+}
+
 .modal-actions button {
   flex: 1;
   min-height: 48px;
@@ -930,6 +1060,10 @@ body {
   }
 
   .stage-status {
+    padding-inline: 14px;
+  }
+
+  .chapter-map {
     padding-inline: 14px;
   }
 

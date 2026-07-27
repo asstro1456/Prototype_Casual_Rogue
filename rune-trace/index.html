@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="theme-color" content="#101d38">
   <title>룬 트레이스 — 프로토타입</title>
-  <link rel="stylesheet" href="./styles.css?v=0.0.6">
+  <link rel="stylesheet" href="./styles.css?v=0.0.7">
 </head>
 <body>
   <main class="app-shell">
     <section class="game-card" aria-label="룬 트레이스 게임 화면">
       <header class="topbar">
         <a class="header-version" href="../index.html" aria-label="프로토타입 허브로 돌아가기">
-          <span data-app-version>v0.0.6</span>
+          <span data-app-version>v0.0.7</span>
           <small>← HUB</small>
         </a>
         <div class="title-lockup">
@@ -24,16 +24,20 @@
 
       <section class="stage-status" aria-label="현재 층 상태">
         <div class="floor-label">
-          <span>MEMORY TOWER</span>
-          <strong id="floorDisplay">FLOOR 01</strong>
+          <span id="floorContext">CHAPTER 01 · STAGE 1</span>
+          <strong id="floorDisplay">FLOOR 1 / 3</strong>
         </div>
         <div id="runeProgress" class="rune-progress" aria-label="완성한 룬"></div>
         <div class="status-counts">
           <span>LV <b id="levelCount">1</b></span>
           <span>적 <b id="enemyCount">0</b></span>
-          <span>EXP <b id="experienceCount">0 / 3</b></span>
+          <span>EXP <b id="experienceCount">0 / 7</b></span>
           <span>빈 칸 <b id="safeCount">49</b></span>
         </div>
+      </section>
+
+      <section class="chapter-map" aria-label="챕터 진행">
+        <div id="chapterProgress" class="chapter-progress"></div>
       </section>
 
       <section class="tower-scene">
@@ -79,12 +83,16 @@
           </div>
         </div>
       </section>
+
+      <button id="levelUpResumeButton" class="levelup-resume" type="button" hidden>
+        능력 선택 보기
+      </button>
     </section>
   </main>
 
   <div id="modalBackdrop" class="modal-backdrop is-open">
     <section id="modalPanel" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
-      <span class="modal-version" data-app-version>v0.0.6 · RUNE TRACE</span>
+      <span class="modal-version" data-app-version>v0.0.7 · RUNE TRACE</span>
       <button id="modalClose" class="modal-close" type="button" aria-label="도움말 닫기">×</button>
       <p id="modalEyebrow" class="modal-eyebrow">NEW PROTOTYPE</p>
       <h2 id="modalTitle">네 개의 룬으로<br>탑의 문을 여세요</h2>
@@ -93,6 +101,6 @@
     </section>
   </div>
 
-  <script src="./app.js?v=0.0.6"></script>
+  <script src="./app.js?v=0.0.7"></script>
 </body>
 </html>
