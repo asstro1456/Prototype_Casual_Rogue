@@ -4045,6 +4045,7 @@ if (storedPlayLogConsent === "granted") {
   } else {
     showPlayLogConsentModal();
   }
+}
   /* =========================================================
  * Automated QA API
  * URL에 ?test=1이 있을 때만 활성화됩니다.
@@ -4448,4 +4449,4 @@ if (runeTraceTestApiEnabled) {
     "Run RuneTraceTest.getCapabilities() for usage.",
   );
 }
-}
+
