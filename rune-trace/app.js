@@ -4045,4 +4045,407 @@ if (storedPlayLogConsent === "granted") {
   } else {
     showPlayLogConsentModal();
   }
+  /* =========================================================
+ * Automated QA API
+ * URL에 ?test=1이 있을 때만 활성화됩니다.
+ * ========================================================= */
+
+const runeTraceTestApiEnabled =
+  new URLSearchParams(window.location.search).get("test") === "1";
+
+if (runeTraceTestApiEnabled) {
+  document.documentElement.dataset.testApi = "rune-trace-v1";
+
+  function clearTestPath() {
+    state.currentPath = [];
+    state.pathStartedAt = 0;
+    renderBoard();
+  }
+
+  function getTestState() {
+    return {
+      apiVersion: 1,
+      gameVersion: APP_VERSION,
+
+      floor: state.floor,
+      stage: currentStage(),
+      floorInStage: currentFloorInStage(),
+
+      running: state.running,
+      modalType: state.modalType,
+
+      level: state.level,
+      experience: state.experience,
+
+      completedRuneCount: completedRuneCount(),
+
+      remainingRunes: remainingRunes().map((rune) => ({
+        instanceId: rune.instanceId,
+        id: rune.id,
+        name: rune.name,
+        points: rune.points.map(([x, y]) => [x, y]),
+      })),
+
+      completedPaths: state.completedPaths.map((entry) => ({
+        runeId: entry.runeId ?? null,
+        path: entry.path.map(({ row, col }) => ({
+          row,
+          col,
+        })),
+      })),
+
+      claimedCells: [...state.claimed],
+      corruptedCells: [...state.corrupted],
+
+      enemies: state.enemies.map((enemy) => ({
+        id: enemy.id,
+        kind: enemy.kind,
+        row: enemy.row,
+        col: enemy.col,
+        shieldCount: enemy.shieldCount ?? 0,
+        moveIntent: enemy.moveIntent
+          ? { ...enemy.moveIntent }
+          : null,
+      })),
+
+      abilities: [...state.abilities],
+      failureReason: state.lastFailureReason,
+    };
+  }
+
+  /*
+   * 현재 보드에서 실제로 그릴 수 있는 룬 경로를 찾습니다.
+   * 반환 형식:
+   * [
+   *   {
+   *     runeId: "line",
+   *     runeName: "일섬",
+   *     cells: [[3, 1], [3, 2], [3, 3], [3, 4]]
+   *   }
+   * ]
+   */
+  function findPlayableTestPaths(limit = 20) {
+    const results = [];
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
+
+    for (const rune of remainingRunes()) {
+      const sequences = getPathSequences(rune);
+
+      for (const sequence of sequences) {
+        for (let originRow = 0; originRow < BOARD_SIZE; originRow += 1) {
+          for (
+            let originCol = 0;
+            originCol < BOARD_SIZE;
+            originCol += 1
+          ) {
+            const path = sequence.map(([x, y]) => ({
+              row: originRow + y,
+              col: originCol + x,
+            }));
+
+            const insideBoard = path.every(
+              ({ row, col }) =>
+                row >= 0 &&
+                row < BOARD_SIZE &&
+                col >= 0 &&
+                col < BOARD_SIZE,
+            );
+
+            if (!insideBoard) {
+              continue;
+            }
+
+            const uniqueCells = new Set(
+              path.map(({ row, col }) => cellKey(row, col)),
+            );
+
+            if (uniqueCells.size !== path.length) {
+              continue;
+            }
+
+            const usesBlockedCell = path.some(({ row, col }) => {
+              const key = cellKey(row, col);
+
+              return (
+                state.claimed.has(key) ||
+                state.corrupted.has(key)
+              );
+            });
+
+            if (usesBlockedCell) {
+              continue;
+            }
+
+            if (pathCrossesCompletedTrace(path)) {
+              continue;
+            }
+
+            if (!matchesRune(path, rune)) {
+              continue;
+            }
+
+            results.push({
+              runeId: rune.id,
+              runeName: rune.name,
+              cells: path.map(({ row, col }) => [row, col]),
+            });
+
+            if (results.length >= safeLimit) {
+              return results;
+            }
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /*
+   * [[row, col], ...] 형식의 경로를 실제 게임 로직으로 처리합니다.
+   */
+  function drawTestPath(cells) {
+    if (!Array.isArray(cells) || cells.length === 0) {
+      return {
+        ok: false,
+        reason: "empty_path",
+      };
+    }
+
+    if (!state.running) {
+      return {
+        ok: false,
+        reason: "game_not_running",
+      };
+    }
+
+    if (state.modalType) {
+      return {
+        ok: false,
+        reason: "modal_open",
+        modalType: state.modalType,
+      };
+    }
+
+    const normalizedCells = [];
+
+    for (const value of cells) {
+      if (
+        !Array.isArray(value) ||
+        value.length !== 2 ||
+        !Number.isInteger(value[0]) ||
+        !Number.isInteger(value[1])
+      ) {
+        return {
+          ok: false,
+          reason: "invalid_cell_format",
+          value,
+        };
+      }
+
+      const [row, col] = value;
+
+      if (
+        row < 0 ||
+        row >= BOARD_SIZE ||
+        col < 0 ||
+        col >= BOARD_SIZE
+      ) {
+        return {
+          ok: false,
+          reason: "cell_out_of_bounds",
+          row,
+          col,
+        };
+      }
+
+      normalizedCells.push({ row, col });
+    }
+
+    state.currentPath = [];
+    state.pathStartedAt = Date.now();
+
+    for (const cell of normalizedCells) {
+      const previousLength = state.currentPath.length;
+
+      appendDrawingCell(cell);
+
+      /*
+       * 정상 입력이면 한 칸씩 추가되어야 합니다.
+       * 차단, 비인접, 잘못된 방향이면 추가되지 않습니다.
+       */
+      if (state.currentPath.length !== previousLength + 1) {
+        clearTestPath();
+
+        return {
+          ok: false,
+          reason: "cell_rejected",
+          row: cell.row,
+          col: cell.col,
+        };
+      }
+    }
+
+    const matchedRune = remainingRunes().find((rune) =>
+      matchesRune(state.currentPath, rune),
+    );
+
+    if (!matchedRune) {
+      const attemptedPath = state.currentPath.map(({ row, col }) => [
+        row,
+        col,
+      ]);
+
+      clearTestPath();
+
+      return {
+        ok: false,
+        reason: "rune_not_matched",
+        attemptedPath,
+      };
+    }
+
+    const committedPath = state.currentPath.map(({ row, col }) => ({
+      row,
+      col,
+    }));
+
+    const result = {
+      ok: true,
+      runeId: matchedRune.id,
+      runeName: matchedRune.name,
+      cells: committedPath.map(({ row, col }) => [row, col]),
+    };
+
+    commitRune(matchedRune, committedPath);
+
+    return result;
+  }
+
+  /*
+   * 로그 동의·튜토리얼·보스 설명처럼
+   * 자동 테스트를 막는 초기 모달을 정리합니다.
+   */
+  async function prepareAutomatedTest() {
+    if (state.modalType === "consent") {
+      await window.RuneTracePlayLog?.setConsent(false);
+      showIntroModal();
+    }
+
+    /*
+     * intro를 닫으면 boss-info가 연속으로 열릴 수 있으므로
+     * 여러 번 확인합니다.
+     */
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const dismissibleModalTypes = [
+        "intro",
+        "boss-info",
+        "help",
+      ];
+
+      if (!dismissibleModalTypes.includes(state.modalType)) {
+        break;
+      }
+
+      requestModalClose();
+    }
+
+    return {
+      ok: !state.modalType,
+      ready: Boolean(
+        state.running &&
+        remainingRunes().length > 0 &&
+        !state.modalType
+      ),
+      modalType: state.modalType,
+    };
+  }
+
+  window.RuneTraceTest = Object.freeze({
+    getCapabilities() {
+      return {
+        apiVersion: 1,
+        gameVersion: APP_VERSION,
+        enabledBy: "?test=1",
+
+        methods: [
+          "getCapabilities",
+          "isReady",
+          "prepare",
+          "getState",
+          "listPlayablePaths",
+          "drawPath",
+          "drawFirstPlayable",
+          "resetFloor",
+          "undo",
+        ],
+
+        pathFormat: "[[row, col], ...]",
+      };
+    },
+
+    isReady() {
+      return {
+        ready: Boolean(
+          refs.board &&
+          state.running &&
+          remainingRunes().length > 0 &&
+          !state.modalType
+        ),
+        modalType: state.modalType,
+        remainingRuneCount: remainingRunes().length,
+      };
+    },
+
+    prepare: prepareAutomatedTest,
+
+    getState: getTestState,
+
+    listPlayablePaths(limit = 20) {
+      return findPlayableTestPaths(limit);
+    },
+
+    drawPath: drawTestPath,
+
+    drawFirstPlayable() {
+      const candidate = findPlayableTestPaths(1)[0];
+
+      if (!candidate) {
+        return {
+          ok: false,
+          reason: "no_playable_path",
+        };
+      }
+
+      return drawTestPath(candidate.cells);
+    },
+
+    resetFloor: () => {
+      resetFloor();
+
+      return {
+        ok: true,
+        floor: state.floor,
+        state: getTestState(),
+      };
+    },
+
+    undo: () => {
+      const previousCount = completedRuneCount();
+
+      undoLastRune();
+
+      return {
+        ok: completedRuneCount() < previousCount,
+        completedRuneCount: completedRuneCount(),
+        state: getTestState(),
+      };
+    },
+  });
+
+  console.info(
+    "[RuneTraceTest] Automated QA API enabled. " +
+    "Run RuneTraceTest.getCapabilities() for usage.",
+  );
+}
 }
