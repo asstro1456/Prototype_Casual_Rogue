@@ -1,0 +1,2009 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="룬 트레이스 창작 기획서 마스터 임시 검토본">
+  <title>룬 트레이스 창작 기획서 마스터 임시본</title>
+  <style>
+    :root {
+      --ink: #182038;
+      --muted: #65708a;
+      --navy: #101b38;
+      --navy-soft: #1d2b52;
+      --mint: #55d6c2;
+      --mint-soft: #e9faf6;
+      --blue-soft: #edf3ff;
+      --line: #d9dfeb;
+      --paper: #ffffff;
+      --panel: #f6f8fc;
+      --warning: #a56316;
+      --warning-soft: #fff5e7;
+    }
+
+    @page {
+      size: A4;
+      margin: 13mm 14mm 16mm;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      color: var(--ink);
+      background: #e7ebf2;
+      font-family: "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif;
+      font-size: 9.3pt;
+      line-height: 1.52;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+
+    body {
+      width: 210mm;
+      margin: 0 auto;
+      background: var(--paper);
+    }
+
+    main { padding: 0; }
+
+    .cover {
+      padding: 0;
+      page-break-after: always;
+    }
+
+    .cover-kicker,
+    .eyebrow {
+      margin: 0 0 3mm;
+      color: #1c7f74;
+      font-size: 8pt;
+      font-weight: 800;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    .cover-title {
+      margin: 0;
+      color: var(--navy);
+      font-size: 32pt;
+      line-height: 1;
+      letter-spacing: -.035em;
+    }
+
+    .cover-title span {
+      display: block;
+      margin-top: 2mm;
+      color: #73809d;
+      font-size: 16pt;
+      letter-spacing: -.02em;
+    }
+
+    .cover-intro {
+      display: grid;
+      grid-template-columns: 1fr 1.12fr;
+      gap: 6mm;
+      align-items: stretch;
+      margin: 5mm 0 4mm;
+    }
+
+    .cover-intro blockquote {
+      display: flex;
+      align-items: center;
+      margin: 0;
+      padding: 6mm;
+      color: white;
+      background: linear-gradient(145deg, var(--navy), #243760);
+      border: 0;
+      border-radius: 4mm;
+      font-size: 14pt;
+      font-weight: 750;
+      line-height: 1.5;
+    }
+
+    .hero-shot {
+      position: relative;
+      min-height: 52mm;
+      margin: 0;
+      overflow: hidden;
+      border: 1px solid #bfc9da;
+      border-radius: 4mm;
+      background: #0f1830;
+    }
+
+    .hero-shot img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+    }
+
+    .hero-shot figcaption {
+      position: absolute;
+      right: 3mm;
+      bottom: 3mm;
+      padding: 1.2mm 2.4mm;
+      color: white;
+      background: rgba(8, 15, 33, .82);
+      border-radius: 99px;
+      font-size: 6.8pt;
+      font-weight: 700;
+    }
+
+    .cover-grid {
+      display: grid;
+      grid-template-columns: 1.18fr .82fr;
+      gap: 4mm;
+      align-items: start;
+    }
+
+    .cover-panel {
+      padding: 3mm;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 3mm;
+    }
+
+    .cover-panel + .cover-panel { margin-top: 2.5mm; }
+    .cover-panel h2 { margin-top: 0; }
+    .cover-panel table {
+      margin: 1.5mm 0 2mm;
+      font-size: 6.9pt;
+    }
+    .cover-panel th,
+    .cover-panel td { padding: 1.15mm 1.4mm; }
+    .cover-panel p,
+    .cover-panel li { font-size: 7.5pt; }
+    .cover-panel ul { margin-bottom: 1mm; }
+
+    .cover-stamp {
+      display: flex;
+      justify-content: space-between;
+      gap: 4mm;
+      margin-top: 2.5mm;
+      padding-top: 2mm;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      font-size: 7.5pt;
+    }
+
+    .toc {
+      min-height: 262mm;
+      page-break-after: always;
+    }
+
+    .toc h1 {
+      margin: 0 0 3mm;
+      font-size: 24pt;
+    }
+
+    .toc > p {
+      max-width: 125mm;
+      color: var(--muted);
+    }
+
+    .toc ol {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.8mm 5mm;
+      margin: 8mm 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .toc li { break-inside: avoid; }
+
+    .toc a {
+      display: grid;
+      grid-template-columns: 10mm 1fr;
+      gap: 2mm;
+      align-items: baseline;
+      padding: 2.2mm 0;
+      color: var(--ink);
+      border-bottom: 1px solid var(--line);
+      text-decoration: none;
+    }
+
+    .toc a span {
+      color: #1c7f74;
+      font-size: 7.2pt;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+
+    .document-body > .chapter {
+      margin-top: 9mm;
+    }
+
+    .document-body > .chapter:first-child { margin-top: 0; }
+    .chapter.page-start { break-before: page; }
+
+    h1, h2, h3, h4 {
+      color: var(--navy);
+      line-height: 1.28;
+      break-after: avoid;
+    }
+
+    h1 {
+      margin: 9mm 0 4mm;
+      padding: 0 0 3mm;
+      border-bottom: 2px solid var(--navy);
+      font-size: 20pt;
+      letter-spacing: -.025em;
+    }
+
+    h2 {
+      margin: 6mm 0 2.5mm;
+      font-size: 13.5pt;
+      letter-spacing: -.015em;
+    }
+
+    h3 {
+      margin: 4mm 0 1.8mm;
+      color: #33466f;
+      font-size: 10.8pt;
+    }
+
+    h4 {
+      margin: 3mm 0 1mm;
+      font-size: 9.8pt;
+    }
+
+    .pending-heading::after {
+      content: "검토";
+      display: inline-block;
+      margin-left: 2mm;
+      padding: .5mm 1.7mm;
+      color: var(--warning);
+      background: var(--warning-soft);
+      border-radius: 99px;
+      font-size: 6.5pt;
+      font-weight: 800;
+      vertical-align: .2em;
+    }
+
+    p { margin: 0 0 2.3mm; }
+    strong { color: #142d5c; }
+
+    ul, ol {
+      margin: 1.4mm 0 3mm;
+      padding-left: 5.5mm;
+    }
+
+    li { margin: 0 0 1mm; }
+    li::marker { color: #1c8d80; font-weight: 800; }
+
+    blockquote {
+      margin: 3mm 0 4mm;
+      padding: 3.5mm 4.5mm;
+      color: #123e4b;
+      background: var(--mint-soft);
+      border-left: 3px solid var(--mint);
+      border-radius: 0 2.5mm 2.5mm 0;
+      break-inside: avoid;
+    }
+
+    blockquote p {
+      margin: 0;
+      font-size: 11pt;
+      font-weight: 750;
+    }
+
+    table {
+      width: 100%;
+      margin: 2.5mm 0 4mm;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 7.6pt;
+      line-height: 1.38;
+    }
+
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+
+    th, td {
+      padding: 1.8mm 2mm;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: white;
+      background: var(--navy-soft);
+      font-weight: 750;
+    }
+
+    tbody tr:nth-child(even) td { background: #f8f9fc; }
+
+    code {
+      padding: .2em .4em;
+      color: #15345c;
+      background: var(--blue-soft);
+      border-radius: 3px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: .9em;
+    }
+
+    a {
+      color: #155f9b;
+      text-decoration: underline;
+      text-underline-offset: .16em;
+    }
+
+    hr {
+      margin: 7mm 0;
+      border: 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .draft-note {
+      margin: 0 0 7mm;
+      padding: 3mm 4mm;
+      color: #5f471f;
+      background: var(--warning-soft);
+      border: 1px solid #f2d2a7;
+      border-radius: 2.5mm;
+      font-size: 8pt;
+    }
+
+    @media screen {
+      body {
+        padding: 14mm;
+        box-shadow: 0 12px 44px rgba(23, 34, 58, .16);
+      }
+    }
+
+    @media print {
+      html, body { background: white; }
+      body { width: auto; }
+      a { color: inherit; }
+    }
+  </style>
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+</head>
+<body>
+  <main>
+    <section class="cover">
+      <p class="cover-kicker">CREATIVE GAME DESIGN · MASTER DRAFT</p>
+      <h1 class="cover-title">RUNE TRACE<span>룬 트레이스</span></h1>
+      <div class="cover-intro">
+        <div><blockquote>
+<p>더 많이 처치할 것인가, 다음 룬을 위한 공간을 남길 것인가.<br>네 개의 룬으로 그려내는 모바일 캐주얼 퍼즐 로그라이크</p>
+</blockquote></div>
+        <figure class="hero-shot">
+          <img src="assets/rune-trace-prototype.png" alt="룬 트레이스 웹 프로토타입 대표 화면">
+          <figcaption>WEB PROTOTYPE v1.0.0</figcaption>
+        </figure>
+      </div>
+      <div class="cover-grid">
+        <section class="cover-panel">
+          <h2>제품 요약</h2>
+          <table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>장르</td>
+<td>경로 연결형 퍼즐 로그라이크</td>
+</tr>
+<tr>
+<td>플랫폼</td>
+<td>모바일 우선, 현재 웹 프로토타입</td>
+</tr>
+<tr>
+<td>핵심 입력</td>
+<td>보드 위에 룬 경로를 직접 그린다</td>
+</tr>
+<tr>
+<td>보드</td>
+<td>7×7</td>
+</tr>
+<tr>
+<td>플레이 구조</td>
+<td>1챕터 = 3스테이지 = 총 9플로어</td>
+</tr>
+<tr>
+<td>목표 시간</td>
+<td>플로어 1&#126;3분 · 스테이지 5&#126;10분 · 챕터 15&#126;30분</td>
+</tr>
+<tr>
+<td>현재 버전</td>
+<td>Web Prototype v1.0.0</td>
+</tr>
+<tr>
+<td>구현 범위</td>
+<td>1개 챕터 · 3개 스테이지 · 9개 플로어</td>
+</tr>
+</tbody></table>
+        </section>
+        <div>
+          <section class="cover-panel">
+            <h2>문서 상태</h2>
+            <table>
+<thead>
+<tr>
+<th>상태</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>구현 완료</td>
+<td>현재 웹 프로토타입에서 확인할 수 있는 기능</td>
+</tr>
+<tr>
+<td>확정 기획</td>
+<td>프로토타입과 이후 문서에서 유지할 기본 규칙</td>
+</tr>
+<tr>
+<td>검증 가설</td>
+<td>플레이테스트와 지표 확인이 필요한 판단</td>
+</tr>
+<tr>
+<td>확장 계획</td>
+<td>팀 또는 퍼블리셔 협업 시 검토할 제품화 범위</td>
+</tr>
+</tbody></table>
+          </section>
+          <section class="cover-panel">
+            <h2>담당 역할</h2>
+            <p>핵심 규칙, 콘텐츠 구조, UX, 초기 밸런스, 예외 처리, 플레이 로그, QA 기준을 설계했습니다. AI를 구현 보조 도구로 활용했으며, 요구사항 정의·검수·수정·통합을 담당했습니다.</p>
+          </section>
+          <section class="cover-panel">
+            <h2>추가 예정 자료</h2>
+            <ul>
+<li>15초 시연 영상 또는 GIF: 편집 후 추가</li>
+<li><a href="https://asstro1456.github.io/Prototype_Casual_Rogue/rune-trace/index.html">프로토타입 플레이</a></li>
+<li>대표 보드 이미지: 표지 반영</li>
+<li>제작 기간: 2026.07.25 - 2026.07.28</li>
+</ul>
+<hr>
+<hr>
+          </section>
+        </div>
+      </div>
+      <div class="cover-stamp">
+        <span>퍼블리셔 · 기획자 포트폴리오 · 경기게임오디션 대응 마스터 문서</span>
+        <strong>임시 검토본 · 2026.07.28</strong>
+      </div>
+    </section>
+
+    <section class="toc">
+      <p class="eyebrow">DOCUMENT MAP</p>
+      <h1>문서 구성</h1>
+      <p>코어 경험과 시장 기회를 앞에 배치하고, 시스템·성장·보스·도구·검증 근거를 뒤에서 구체화했습니다. 수치와 외부 시장 자료는 부록으로 분리했습니다.</p>
+      <p class="draft-note"><strong>문서 상태:</strong> 초안 및 계획 단계의 마스터 문서입니다. ‘구현 완료’, ‘확정 기획’, ‘검증 가설’, ‘확장 계획’을 구분해 읽어야 하며, 시연 영상은 최종 제출본에서 보완합니다.</p>
+      <ol><li><a href="#2-코어-플레이와-차별점"><span>01</span>2. 코어 플레이와 차별점</a></li><li><a href="#3-장르-포지셔닝-타깃-시장-기회"><span>02</span>3. 장르 포지셔닝·타깃·시장 기회</a></li><li><a href="#4-첫-플레이-광고-튜토리얼-ux"><span>03</span>4. 첫 플레이·광고·튜토리얼·UX</a></li><li><a href="#5-세션-성장-반복-구조"><span>04</span>5. 세션·성장·반복 구조</a></li><li><a href="#6-능력-빌드-전략-다양성"><span>05</span>6. 능력·빌드·전략 다양성</a></li><li><a href="#7-보스-시스템"><span>06</span>7. 보스 시스템</a></li><li><a href="#8-도구-콘텐츠-확장-수익화-가설"><span>07</span>8. 도구·콘텐츠 확장·수익화 가설</a></li><li><a href="#9-프로토타입-변천과-개선-근거"><span>08</span>9. 프로토타입 변천과 개선 근거</a></li><li><a href="#10-검증-계획과-데이터"><span>09</span>10. 검증 계획과 데이터</a></li><li><a href="#11-제작-범위와-담당-역할"><span>10</span>11. 제작 범위와 담당 역할</a></li><li><a href="#12-조건부-제품화-리스크-결론"><span>11</span>12. 조건부 제품화·리스크·결론</a></li><li><a href="#부록-a-제출-목적별-가감-기준"><span>12</span>부록 A. 제출 목적별 가감 기준</a></li><li><a href="#부록-b-데이터-테이블-작성-대상"><span>13</span>부록 B. 데이터 테이블 작성 대상</a></li><li><a href="#부록-c-수치-시장-데이터"><span>14</span>부록 C. 수치·시장 데이터</a></li></ol>
+    </section>
+
+    <article class="document-body">
+      <h1 id="2-코어-플레이와-차별점" class="chapter">2. 코어 플레이와 차별점</h1>
+<h2 id="핵심-문장">핵심 문장</h2>
+<blockquote>
+<p>한 번의 경로로 적을 베고, 공간을 만들며, 다음 성장을 설계한다.</p>
+</blockquote>
+<p>룬은 몬스터를 처치하고 오염 압박을 줄입니다. 동시에 완성한 경로는 흔적으로 남아 다음 룬의 배치 공간을 줄입니다. 한 번의 입력이 현재 전투와 이후 행동에 모두 영향을 주는 구조입니다.</p>
+<h2 id="코어-플레이-루프">코어 플레이 루프</h2>
+<p>룬·이동·오염 예정 확인<br>→ 경로와 남길 공간 비교<br>→ 보드에 룬 직접 입력<br>→ 직접 공격과 능력 처리<br>→ 몬스터 이동·오염 생성<br>→ 성장 방향 판단<br>→ 클리어 또는 실패</p>
+<h2 id="한-행동의-판단-구조">한 행동의 판단 구조</h2>
+<table>
+<thead>
+<tr>
+<th>판단</th>
+<th>확인할 내용</th>
+<th>플레이 결과</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>처치</td>
+<td>현재 몇 명을 직접 처리할 수 있는가</td>
+<td>EXP와 즉시 안전 확보</td>
+</tr>
+<tr>
+<td>공간</td>
+<td>다음 룬을 놓을 빈칸이 남는가</td>
+<td>이후 행동 가능성 유지</td>
+</tr>
+<tr>
+<td>이동</td>
+<td>적의 이동 예정 칸을 막거나 이용할 수 있는가</td>
+<td>유혹·보스 충돌 조건 형성</td>
+</tr>
+<tr>
+<td>성장</td>
+<td>능력 발동과 레벨업 조건을 만들 수 있는가</td>
+<td>다음 플로어의 공략 방식 변화</td>
+</tr>
+</tbody></table>
+<h2 id="핵심-규칙-구현-완료">핵심 규칙 — 구현 완료</h2>
+<ul>
+<li>7×7 보드에 플로어마다 제시된 룬 최대 4개를 직접 그립니다.</li>
+<li>룬은 직각 회전과 좌우 반전을 허용하며, 입력 경로를 남은 룬과 자동 대조합니다.</li>
+<li>경로 위 대상은 직접 공격을 받고 완성된 룬은 흔적으로 남습니다.</li>
+<li>일부 몬스터는 이동한 뒤 이전 칸을 오염시킵니다.</li>
+<li>흔적과 오염에는 기본적으로 새 룬을 놓거나 기존 경로를 교차할 수 없습니다.</li>
+<li>잘못된 룬 입력은 행동으로 소비하지 않습니다.</li>
+<li>일반 플로어는 룬 4개를 완성하거나 일반 몬스터를 전부 처치하면 클리어합니다.</li>
+<li>보스 플로어는 네 번째 룬 행동까지 보스를 처치해야 합니다.</li>
+<li>남은 룬을 하나도 배치할 수 없으면 공간 부족으로 실패합니다.</li>
+</ul>
+<h2 id="성공-실패-재진입">성공·실패·재진입</h2>
+<table>
+<thead>
+<tr>
+<th>상태</th>
+<th>판정</th>
+<th>다음 흐름</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>일반 플로어 조기 전멸</td>
+<td>남은 룬 수와 관계없이 클리어</td>
+<td>보상·레벨업 처리 후 다음 플로어</td>
+</tr>
+<tr>
+<td>룬 4개 완성</td>
+<td>일반 몬스터가 남아도 일반 플로어 클리어</td>
+<td>현재 성장 상태 유지</td>
+</tr>
+<tr>
+<td>공간 부족</td>
+<td>남은 룬을 하나도 배치할 수 없음</td>
+<td>실패 원인 확인 후 플로어 초기화 또는 재도전</td>
+</tr>
+<tr>
+<td>보스 생존</td>
+<td>네 번째 룬 처리 뒤 보스가 생존</td>
+<td>보스전 실패</td>
+</tr>
+<tr>
+<td>잘못된 입력</td>
+<td>남은 룬과 일치하지 않음</td>
+<td>턴을 소비하지 않고 다시 입력</td>
+</tr>
+<tr>
+<td>중단 후 복귀</td>
+<td>저장된 결과와 무작위 상태 복원</td>
+<td>같은 플로어에서 계속 진행</td>
+</tr>
+</tbody></table>
+<h2 id="차별점과-게임-필러">차별점과 게임 필러</h2>
+<table>
+<thead>
+<tr>
+<th>차별점</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>직접 입력</td>
+<td>손가락으로 그린 경로가 즉시 공격으로 연결됩니다.</td>
+</tr>
+<tr>
+<td>공격이 곧 공간 소모</td>
+<td>많이 처치한 경로가 이후 룬의 자리를 막을 수 있습니다.</td>
+</tr>
+<tr>
+<td>사전 정보 기반 판단</td>
+<td>몬스터 이동과 오염 예정 정보를 보고 경로를 정합니다.</td>
+</tr>
+<tr>
+<td>짧은 빌드 변화</td>
+<td>한 챕터 안에서 능력이 좋은 경로의 기준을 바꿉니다.</td>
+</tr>
+</tbody></table>
+<p>게임 필러는 <code>직접 그리는 직관적인 조작</code>, <code>한 수에 전투와 공간을 함께 고려</code>, <code>짧은 세션 안에서 변화하는 능력 빌드</code>입니다.</p>
+<h2 id="플레이-감정-흐름">플레이 감정 흐름</h2>
+<p>보드와 룬 확인<br>→ 가능한 경로 발견<br>→ 더 좋은 위치 탐색<br>→ 입력 확정<br>→ 연속 처치 만족<br>→ 몬스터 이동과 공간 감소<br>→ 다음 룬에 대한 고민 증가<br>→ 마지막 룬 성공 또는 공간 부족 실패</p>
+<h2 id="공정성-원칙">공정성 원칙</h2>
+<ul>
+<li>이동 방향, 오염 예정, 보스 기믹을 행동 전에 공개합니다.</li>
+<li>입력 중에 무작위 결과를 다시 설정하지 않습니다.</li>
+<li>미리보기와 실제 처리 결과를 일치시킵니다.</li>
+<li>강제 종료와 복귀로 같은 결과를 다시 추첨할 수 없게 합니다.</li>
+<li>실패 원인은 보드와 결과 화면에서 확인할 수 있어야 합니다.</li>
+</ul>
+<hr>
+<h1 id="3-장르-포지셔닝-타깃-시장-기회" class="chapter">3. 장르 포지셔닝·타깃·시장 기회</h1>
+<h2 id="기획-출발점">기획 출발점</h2>
+<p>모바일 퍼즐의 낮은 진입 장벽과 로그라이크의 반복 변화를 결합합니다. 조작은 간단하게 유지하되, 한 플로어의 행동을 4회로 제한하고 능력은 수치보다 경로와 공간 판단을 바꾸게 합니다. 보편적인 HP 대신 보드 공간을 실패 자원으로 사용합니다.</p>
+<h2 id="핵심-타깃">핵심 타깃</h2>
+<blockquote>
+<p>복잡한 조작보다 간단히 풀 수 있는 퍼즐을 선호하거나, 한 판만으로 성장과 플레이 변화를 느끼고 싶은 모바일 유저</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>이용 성향·상황</th>
+<th>설계 대응</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>통학·출퇴근, 쉬는 시간, 취침 전 플레이</td>
+<td>플로어 1&#126;3분, 스테이지 5&#126;10분 목표</td>
+</tr>
+<tr>
+<td>규칙을 플레이로 익히고 싶음</td>
+<td>직접 입력과 즉시 결과, 짧은 튜토리얼</td>
+</tr>
+<tr>
+<td>짧아도 선택의 결과를 느끼고 싶음</td>
+<td>룬 4회 안에서 처치·공간·성장 비교</td>
+</tr>
+<tr>
+<td>실패 이유를 알고 바로 재도전하고 싶음</td>
+<td>이동·오염 예고, 실패 원인 표시, 플로어 저장</td>
+</tr>
+<tr>
+<td>반복할 이유가 필요함</td>
+<td>능력 선택, 룬 조합, 보스 변형</td>
+</tr>
+</tbody></table>
+<h2 id="시장-기회-가설">시장 기회 가설</h2>
+<p>직접 그리는 입력은 일반적인 탭·매치 퍼즐과 다른 첫 인상을 만들 수 있습니다. 경로 입력, 연속 처치, 오염 확산, 공간 부족 실패가 모두 보드에서 표현되므로 광고와 실제 플레이의 행동을 맞추기 쉽습니다.</p>
+<p>검증할 가설은 다음과 같습니다.</p>
+<ul>
+<li>직접 그리는 조작이 광고와 첫 플레이의 후킹 요소가 되는가</li>
+<li>공간 관리가 불쾌한 제한이 아니라 판단의 재미로 인식되는가</li>
+<li>짧은 세션 안의 능력 선택이 다음 플레이의 동기가 되는가</li>
+<li>광고에서 본 행동과 실제 플레이의 일치가 초기 이탈을 줄이는가</li>
+</ul>
+<p>국가별 시장 수치와 수익성 계산은 <code>부록 C. 수치·시장 데이터</code>에서 외부 사실과 내부 해석을 분리해 관리합니다.</p>
+<hr>
+<h1 id="4-첫-플레이-광고-튜토리얼-ux" class="chapter">4. 첫 플레이·광고·튜토리얼·UX</h1>
+<h2 id="설계-원칙">설계 원칙</h2>
+<blockquote>
+<p>광고에서 본 행동을 첫 플레이에서도 바로 수행하게 한다.</p>
+</blockquote>
+<p>첫 1분 안에 룬 확인, 직접 그리기, 적 처리, 흔적 생성을 경험하게 합니다. 광고 소재는 <code>많이 잡았지만 마지막 룬을 놓지 못한 실패</code>, <code>같은 룬의 서로 다른 결과</code>, <code>네 개의 룬을 모두 배치하는 도전</code>을 우선 검토합니다.</p>
+<h2 id="광고-소재-가설">광고 소재 가설</h2>
+<table>
+<thead>
+<tr>
+<th>소재</th>
+<th>짧은 전개</th>
+<th>전달할 차별점</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>마지막 룬 공간 남기기</td>
+<td>다수를 처치했지만 마지막 룬을 놓지 못한 뒤, 공간을 남긴 경로로 성공</td>
+<td>많이 잡는 것이 항상 정답은 아님</td>
+</tr>
+<tr>
+<td>같은 룬, 다른 결과</td>
+<td>같은 룬을 서로 다른 위치에 배치해 처치·공간·이동 결과 비교</td>
+<td>위치와 방향이 결과를 바꿈</td>
+</tr>
+<tr>
+<td>네 개의 룬 도전</td>
+<td>보드와 룬 4개를 처음부터 보여주고 모두 배치할 수 있는지 질문</td>
+<td>짧고 명확한 플로어 목표</td>
+</tr>
+</tbody></table>
+<p>광고에서 실패를 과장하기 위해 실제 규칙에 없는 선택을 만들지 않습니다. 소재에서 보여준 입력과 실패 원인을 첫 플레이에서도 그대로 경험하게 합니다.</p>
+<h2 id="튜토리얼-흐름-확장-계획" class="pending-heading">튜토리얼 흐름 — 확장 계획</h2>
+<table>
+<thead>
+<tr>
+<th align="right">단계</th>
+<th>경험</th>
+<th>전달할 규칙</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="right">1</td>
+<td>추천 경로를 따라 첫 룬 완성</td>
+<td>룬 직접 입력</td>
+</tr>
+<tr>
+<td align="right">2</td>
+<td>경로 위 몬스터 처치</td>
+<td>경로가 공격 범위</td>
+</tr>
+<tr>
+<td align="right">3</td>
+<td>완성 경로가 흔적으로 유지</td>
+<td>공격이 공간을 소모</td>
+</tr>
+<tr>
+<td align="right">4</td>
+<td>같은 룬의 다른 위치 비교</td>
+<td>정답이 하나가 아님</td>
+</tr>
+<tr>
+<td align="right">5</td>
+<td>이동과 오염 경험</td>
+<td>예정 정보 확인</td>
+</tr>
+<tr>
+<td align="right">6</td>
+<td>마지막 룬 배치</td>
+<td>공간 관리와 실패 조건</td>
+</tr>
+</tbody></table>
+<p>긴 설명보다 한 번의 플레이 안에서 규칙을 익히게 합니다.</p>
+<h2 id="ux-정보-우선순위-확정-기획">UX 정보 우선순위 — 확정 기획</h2>
+<ol>
+<li>처치 예정</li>
+<li>몬스터와 보스의 이동 화살표</li>
+<li>오염 예정</li>
+</ol>
+<h2 id="주요-표시-규칙">주요 표시 규칙</h2>
+<ul>
+<li>이동 화살표는 현재 칸과 목적지 칸 사이에 표시합니다.</li>
+<li>처치 예정 대상은 알파값을 낮춰 표시합니다.</li>
+<li>보스의 방어막, 필요 타격 수, 변형 효과는 진입 시 먼저 공개합니다.</li>
+<li>능력은 평소 아이콘으로 유지하고 클릭 또는 호버로 상세 설명을 엽니다.</li>
+<li>레벨업 선택은 가장 높은 우선순위의 모달로 표시합니다.</li>
+<li>모달을 감춘 뒤 화면을 클릭하면 능력 선택을 다시 확인할 수 있어야 합니다.</li>
+<li>QA 패널은 보드를 가리지 않는 게임 화면 밖에 배치합니다.</li>
+<li>핵심 상태는 크기·굵기·아이콘을 함께 사용하고 색상만으로 구분하지 않습니다.</li>
+</ul>
+<h2 id="텍스트-가독성">텍스트 가독성</h2>
+<ul>
+<li>플레이 필수 정보는 보조 설명보다 크게 표시합니다.</li>
+<li>제목과 핵심 수치는 본문보다 굵게 표시합니다.</li>
+<li>발동 조건, 수치, 상태 변화만 선택적으로 강조합니다.</li>
+<li>핵심 설명은 한 문장, 최대 두 줄을 기준으로 검토합니다.</li>
+<li>구체적인 글자 크기와 세션 기준은 부록에서 관리합니다.</li>
+</ul>
+<h2 id="첫-플레이-확인-지표">첫 플레이 확인 지표</h2>
+<p>첫 행동 시간, 첫 룬 입력 성공률, 잘못된 입력 횟수, 첫 플로어 진입·클리어율, 튜토리얼 이탈률, 이동·오염 예고 이해도를 확인합니다.</p>
+<hr>
+<h1 id="5-세션-성장-반복-구조" class="chapter">5. 세션·성장·반복 구조</h1>
+<h2 id="세션-구조">세션 구조</h2>
+<table>
+<thead>
+<tr>
+<th>단위</th>
+<th align="right">구성</th>
+<th align="right">목표 시간</th>
+<th>역할</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>플로어</td>
+<td align="right">룬 최대 4회</td>
+<td align="right">약 1&#126;3분</td>
+<td>짧은 문제 상황</td>
+</tr>
+<tr>
+<td>스테이지</td>
+<td align="right">3개 플로어</td>
+<td align="right">약 5&#126;10분</td>
+<td>성장 최소치와 판단 숙련 확인</td>
+</tr>
+<tr>
+<td>챕터</td>
+<td align="right">3개 스테이지</td>
+<td align="right">약 15&#126;30분</td>
+<td>하나의 빌드 완성</td>
+</tr>
+</tbody></table>
+<p>현재 시간은 실측이 아닌 목표값입니다. 플로어 단위로 저장하고, 같은 무작위 결과로 복원해 짧은 단위의 플레이와 종료 악용 방지를 함께 처리합니다.</p>
+<h2 id="챕터-내부-성장">챕터 내부 성장</h2>
+<p>플로어 진입<br>→ 직접 처치 EXP 획득<br>→ 레벨업 능력 선택<br>→ 스테이지 보스 공략<br>→ 다음 스테이지 진입<br>→ 챕터 보스 공략<br>→ 능력·레벨·EXP 초기화</p>
+<h2 id="성장-규칙-구현-완료">성장 규칙 — 구현 완료</h2>
+<ul>
+<li>직접 경로로 일반 몬스터를 처치하면 EXP 1을 획득합니다.</li>
+<li>능력의 추가 처치는 EXP를 지급하거나 다른 능력을 연쇄 발동시키지 않습니다.</li>
+<li>레벨업 요구치는 챕터 안에서 증가하지 않습니다.</li>
+<li>레벨업 시 최대 3장의 능력 카드를 같은 확률로 제시합니다.</li>
+<li>최대 단계 능력은 후보에서 제외하고 선택 능력은 챕터 동안 유지합니다.</li>
+<li>모든 성장이 끝난 뒤의 보상은 아웃게임 재화로 전환하는 방향을 검토합니다.</li>
+</ul>
+<h2 id="아웃게임과-반복-확장-계획" class="pending-heading">아웃게임과 반복 — 확장 계획</h2>
+<ul>
+<li>능력·레벨·EXP는 챕터 단위로 초기화합니다.</li>
+<li>아웃게임 재화와 획득한 외형은 유지합니다.</li>
+<li>도구 확보와 외형 해금을 장기 보상으로 검토합니다.</li>
+<li>범용 인게임 특수 자원은 도입하지 않습니다.</li>
+<li>반복 변화는 룬 순서, 몬스터 이동, 능력 선택, 보스 변형에서 만듭니다.</li>
+<li>메타 시스템이 핵심 퍼즐보다 앞서지 않게 합니다.</li>
+</ul>
+<h2 id="반복-동기">반복 동기</h2>
+<p>현재 반복 동기는 룬 조합과 순서, 몬스터 배치와 이동, 능력 선택지, 보스 변형, 실패 후 다른 경로 시도에서 만듭니다. 제품화 이후에는 능력·룬 도감, 도전 과제, 최고 기록, 외형 수집, 일일·주간 도전을 검토합니다.</p>
+<p>플레이어가 실패한 빌드를 챕터 시작부터 다시 구성할 수 있도록 챕터 단위 초기화를 유지합니다. 이전 선택이 지나치게 누적되어 되돌릴 수 없는 구조는 피합니다.</p>
+<hr>
+<h1 id="6-능력-빌드-전략-다양성" class="chapter">6. 능력·빌드·전략 다양성</h1>
+<h2 id="설계-목표">설계 목표</h2>
+<blockquote>
+<p>능력은 수치 상승에 그치지 않고, 경로 선택과 공간 운용 방식을 바꾼다.</p>
+</blockquote>
+<p>전투 능력은 추가 처치와 공간 확보를 돕고, 퍼즐 능력은 직접 경로와 배치 가능성을 안정화합니다. 순수 전투, 순수 퍼즐, 혼합 빌드를 모두 허용하되 한 행동에서 같은 대상은 최대 1회만 피격됩니다.</p>
+<h2 id="능력-구성-구현-완료">능력 구성 — 구현 완료</h2>
+<table>
+<thead>
+<tr>
+<th>능력</th>
+<th>분류</th>
+<th align="right">최대 단계</th>
+<th>핵심 효과</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>유혹</td>
+<td>전투</td>
+<td align="right">3</td>
+<td>새 룬에 이동이 막힌 일반 몬스터를 룬으로 충돌시킴</td>
+</tr>
+<tr>
+<td>도탄</td>
+<td>전투</td>
+<td align="right">3</td>
+<td>일반 몬스터 2체 이상 직접 처치 시 가까운 대상을 추가 공격</td>
+</tr>
+<tr>
+<td>끝점 참격</td>
+<td>전투</td>
+<td align="right">3</td>
+<td>룬의 마지막 진행 방향과 끝점 주변을 추가 공격</td>
+</tr>
+<tr>
+<td>오염 무시</td>
+<td>퍼즐</td>
+<td align="right">1</td>
+<td>플로어당 한 번 오염 칸 1개를 통과</td>
+</tr>
+<tr>
+<td>룬 연결</td>
+<td>퍼즐</td>
+<td align="right">1</td>
+<td>기존 룬 끝점에서 새 룬을 잇고 이전 흔적을 제거</td>
+</tr>
+<tr>
+<td>룬 교체</td>
+<td>퍼즐</td>
+<td align="right">1</td>
+<td>플로어당 한 번 남은 룬 하나를 다른 기본 형태로 교체</td>
+</tr>
+</tbody></table>
+<h2 id="전투-능력의-개성">전투 능력의 개성</h2>
+<table>
+<thead>
+<tr>
+<th>능력</th>
+<th>발동 기준</th>
+<th>성장 방향</th>
+<th>미리보기</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>유혹</td>
+<td>새 룬이 생존 대상의 이동 목적지를 막음</td>
+<td>처리 대상 1체 → 2체 → 조건을 만족한 전체</td>
+<td>충돌 대상의 알파값을 낮춤</td>
+</tr>
+<tr>
+<td>도탄</td>
+<td>한 룬으로 일반 몬스터 2체 이상 직접 처치</td>
+<td>추가 공격 수와 발동 기회 강화</td>
+<td>끝점에서 가까운 추가 대상 표시</td>
+</tr>
+<tr>
+<td>끝점 참격</td>
+<td>룬 끝점과 마지막 진행 방향 확정</td>
+<td>추가 1칸 → 총 3칸 → 끝점을 둘러싼 총 7칸</td>
+<td>입력 중 공격 범위와 처치 대상 표시</td>
+</tr>
+</tbody></table>
+<p>유혹의 동률 우선순위는 화면 기준 왼쪽, 그다음 위쪽을 먼저 사용합니다. 도탄은 끝점과 가까운 대상을 고르고 동률이면 왼쪽 위를 우선합니다. 우선순위는 같은 상태에서 결과를 다시 추첨하지 않기 위한 규칙입니다.</p>
+<h2 id="퍼즐-능력의-개성">퍼즐 능력의 개성</h2>
+<ul>
+<li><code>오염 무시</code>는 플로어당 한 번 오염 칸 하나를 경로에 포함하되 해당 칸에 흔적을 남기지 않습니다.</li>
+<li><code>룬 연결</code>은 기존 흔적 끝점에서 새 룬을 시작하고 완성 시 연결에 사용한 이전 흔적을 제거합니다.</li>
+<li><code>룬 교체</code>는 플로어당 한 번 남은 룬을 다른 기본 형태로 무작위 교체합니다.</li>
+</ul>
+<p>퍼즐 능력은 현재 성장 단계가 없는 임시 구조입니다. 전투 능력과의 체감 격차를 확인한 뒤 단계 확장을 결정합니다.</p>
+<h2 id="처리-순서와-미리보기">처리 순서와 미리보기</h2>
+<p>직접 공격<br>→ 끝점 참격<br>→ 유혹<br>→ 도탄<br>→ 생존 몬스터와 보스 이동<br>→ 오염 처리</p>
+<p>룬이 확정되기 전까지 직접 처치와 능력 추가 처치 대상을 낮은 투명도로 표시합니다. 능력으로 추가 처치한 대상은 다른 능력을 연쇄 발동시키지 않으며 직접 처치 EXP도 지급하지 않습니다.</p>
+<h2 id="빌드-방향">빌드 방향</h2>
+<table>
+<thead>
+<tr>
+<th>빌드</th>
+<th>중심 능력</th>
+<th>달라지는 판단</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>공격 확장</td>
+<td>도탄·끝점 참격</td>
+<td>한 룬의 직접 처치 수와 추가 공격 범위</td>
+</tr>
+<tr>
+<td>이동 예측·충돌</td>
+<td>유혹</td>
+<td>생존 대상의 이동 예정 칸을 막는 위치</td>
+</tr>
+<tr>
+<td>공간·경로 유연성</td>
+<td>오염 무시·룬 연결·룬 교체</td>
+<td>후반 룬을 위한 공간과 경로 확보</td>
+</tr>
+</tbody></table>
+<h2 id="다양성-확인-기준">다양성 확인 기준</h2>
+<ul>
+<li>능력에 따라 좋은 경로의 기준이 바뀌는가</li>
+<li>서로 다른 능력이 같은 결과만 만들지는 않는가</li>
+<li>특정 능력 없이도 보스를 공략할 수 있는가</li>
+<li>능력 조합이 플레이어의 판단을 무의미하게 만들지는 않는가</li>
+<li>한 가지 조합만 반복해서 선택하지는 않는가</li>
+<li>선택 결과를 다음 플로어에서 바로 체감하는가</li>
+</ul>
+<hr>
+<h1 id="7-보스-시스템" class="chapter">7. 보스 시스템</h1>
+<h2 id="역할">역할</h2>
+<blockquote>
+<p>보스는 현재 빌드가 필요한 성장 최소치를 채웠는지 확인하는 관문이다.</p>
+</blockquote>
+<p>각 스테이지의 세 번째 플로어에 이동형 보스를 배치합니다. 스테이지 1·2는 가벼운 관문이며, 스테이지 3은 완성된 빌드와 퍼즐 판단을 확인합니다.</p>
+<h2 id="기본-규칙-구현-완료">기본 규칙 — 구현 완료</h2>
+<ul>
+<li>모든 몬스터의 본체는 방어막이 없을 때 1회 피격으로 처치됩니다.</li>
+<li>보스는 일반 몬스터보다 먼저 이동 칸을 예약하고 행동 전에 방향을 공개합니다.</li>
+<li>한 룬 행동에서 보스는 최대 1회만 피해를 받습니다.</li>
+<li>네 번째 룬까지 보스를 처치하지 못하면 실패합니다.</li>
+<li>스테이지별 방어막과 동반 몬스터 수는 부록의 초기 밸런스값을 따릅니다.</li>
+</ul>
+<h2 id="기본-기믹">기본 기믹</h2>
+<table>
+<thead>
+<tr>
+<th>기믹</th>
+<th>조건</th>
+<th>결과</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>돌진 충돌</td>
+<td>새 룬이 보스의 예약 이동 칸을 막음</td>
+<td>해당 행동에서 미피격 상태면 1회 피격 후 정지</td>
+</tr>
+<tr>
+<td>탈출 이동</td>
+<td>보스가 흔적·오염·몬스터에 완전히 갇힘</td>
+<td>우선순위에 따라 장애물 하나를 제거하고 이동</td>
+</tr>
+</tbody></table>
+<p>탈출 자체는 피해를 주지 않으며, 보스가 영구적으로 갇혀 층 초기화를 강제하는 상황을 막습니다.</p>
+<h2 id="보스-타격-수단">보스 타격 수단</h2>
+<table>
+<thead>
+<tr>
+<th>수단</th>
+<th>플레이어 판단</th>
+<th>제한</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>직접 경로</td>
+<td>보스가 있는 칸을 룬으로 통과</td>
+<td>한 행동 최대 1피격</td>
+</tr>
+<tr>
+<td>돌진 충돌</td>
+<td>예약 이동 칸을 새 룬으로 선점</td>
+<td>이미 피격됐다면 추가 피해 없음</td>
+</tr>
+<tr>
+<td>약점 표식</td>
+<td>보스 대신 공개된 표식을 경로에 포함</td>
+<td>해당 변형에서만 사용</td>
+</tr>
+<tr>
+<td>수호 연결</td>
+<td>연결된 일반 몬스터를 우선 처치</td>
+<td>연결 대상과 결과를 행동 전에 표시</td>
+</tr>
+</tbody></table>
+<p>보스는 일반 몬스터와 달리 여러 번의 타격 기회를 요구합니다. 직접 경로만 강제하면 네 번의 룬 안에서 선택지가 지나치게 줄어들기 때문에, 공간 퍼즐과 동반 몬스터를 이용한 보조 타격 수단을 함께 제공합니다.</p>
+<h2 id="보스-변형-구현-완료-검증-필요" class="pending-heading">보스 변형 — 구현 완료·검증 필요</h2>
+<table>
+<thead>
+<tr>
+<th>스테이지</th>
+<th>변형</th>
+<th>핵심 효과</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>약점 표식</td>
+<td>표식을 룬 경로가 직접 통과하면 보스 피격</td>
+</tr>
+<tr>
+<td>2</td>
+<td>수호 연결</td>
+<td>연결된 일반 몬스터를 처치하면 보스 피격</td>
+</tr>
+<tr>
+<td>3</td>
+<td>증원 소환</td>
+<td>보스가 피격 후 생존하면 인접 칸에 일반 몬스터 1체 소환</td>
+</tr>
+</tbody></table>
+<p>현재는 이해도와 난도를 분리해 확인하기 위해 스테이지별로 고정합니다.</p>
+<h2 id="보스-정보-표시">보스 정보 표시</h2>
+<ul>
+<li>스테이지와 보스 플로어 진입 시 방어막, 필요 타격 수, 변형 효과를 먼저 보여줍니다.</li>
+<li>플레이 중에는 상단에서 변형 이름과 핵심 효과를 다시 확인할 수 있습니다.</li>
+<li>방어막은 굵은 하늘색 외곽선과 반투명 패널로 표시합니다.</li>
+<li>예약 이동, 약점, 수호 연결, 소환 위치는 행동 전에 표시합니다.</li>
+</ul>
+<h2 id="공정성과-확인-지표">공정성과 확인 지표</h2>
+<ul>
+<li>스테이지 진입 시 방어막, 필요 타격 수, 변형 효과를 공개합니다.</li>
+<li>특정 능력이나 구매형 도구를 필수로 요구하지 않습니다.</li>
+<li>같은 상태에서 결과를 다시 추첨할 수 없게 합니다.</li>
+<li>변형별 클리어·포기·재시도, 보스 피격 출처, 평균 필요 타격 수, 기믹 이해도, 탈출 이동 빈도를 확인합니다.</li>
+</ul>
+<hr>
+<h1 id="8-도구-콘텐츠-확장-수익화-가설" class="chapter">8. 도구·콘텐츠 확장·수익화 가설</h1>
+<h2 id="도구-원칙">도구 원칙</h2>
+<ul>
+<li>정상적인 퍼즐은 도구 없이도 해결할 수 있어야 합니다.</li>
+<li>도구는 의도적인 불편의 해결책이 아니라 귀찮음이나 단발성 실패를 보완합니다.</li>
+<li>능력은 챕터 동안 반복 사용하는 약한 변화, 도구는 사용 시 소모되는 강한 보완으로 구분합니다.</li>
+<li>도구는 세 종류만 유지합니다.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>도구</th>
+<th>역할</th>
+<th>소비 시점</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>탐색 렌즈</td>
+<td>최대 처치 룬과 경로를 최대 3개까지 안내. 처치 수가 0이면 합법 경로 표시</td>
+<td>안내 경로를 완성했을 때</td>
+</tr>
+<tr>
+<td>교차 인장</td>
+<td>다음 룬 하나가 기존 흔적 1칸을 통과</td>
+<td>실제 교차한 룬을 완성했을 때</td>
+</tr>
+<tr>
+<td>정화 도구</td>
+<td>선택한 오염 칸 1개를 즉시 제거</td>
+<td>효과 적용 즉시</td>
+</tr>
+</tbody></table>
+<p>탐색 렌즈는 현재 보드에서 가장 많은 몬스터를 처리할 수 있는 룬을 강조합니다. 동률이면 여러 룬을 표시하고, 룬을 선택하면 가능한 최대 처리 경로를 최대 3개까지 보여줍니다. 선택 룬을 바꾸면 경로도 즉시 바뀝니다. 최대 처치 수가 0이면 합법적인 경로를 안내합니다.</p>
+<p>렌즈 사용 중에는 보드와 룬을 딤드 화면 위에서 강조합니다. 경로대로 룬을 완성해야 도구와 턴을 소비하며, 안내만 확인하고 이탈하는 사용은 허용하지 않는 방향입니다. 이 제약이 불쾌한지는 별도로 확인합니다.</p>
+<p>교차 인장은 흔적 여러 칸을 따라가거나 오염을 통과할 수 없습니다. 정화 도구는 몬스터, 보스, 흔적이 아니라 오염 칸 하나만 대상으로 합니다.</p>
+<p>반입 수량, 중복 제한, 가격, 무료 공급량, 재시작 시 환불 규칙은 미정입니다.</p>
+<h2 id="콘텐츠-생산-구조">콘텐츠 생산 구조</h2>
+<p><code>룬 세트 × 몬스터 구성 × 보드 조건 × 능력 풀 × 보스 변형 × 특수 규칙</code></p>
+<table>
+<thead>
+<tr>
+<th>확장 요소</th>
+<th>변화하는 판단</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>룬·보드</td>
+<td>배치 가능 위치와 공간 활용</td>
+</tr>
+<tr>
+<td>몬스터·보스</td>
+<td>처치 우선순위와 공략 목표</td>
+</tr>
+<tr>
+<td>능력</td>
+<td>공격·경로·이동 제어 방식</td>
+</tr>
+<tr>
+<td>목표·특수 규칙</td>
+<td>플로어의 성공 기준</td>
+</tr>
+</tbody></table>
+<p>보드는 최대 9×9, 일반 룬은 4&#126;6칸, 특수 룬은 최대 7칸까지 검토합니다. 보드 확대보다 몬스터·보스·특수 칸의 판단 밀도를 먼저 조정합니다.</p>
+<h2 id="수익화-운영-원칙-검증-가설">수익화·운영 원칙 — 검증 가설</h2>
+<ul>
+<li>진행도나 핵심 판단을 결제로 제거하지 않습니다.</li>
+<li>실패 직후 광고를 반복 노출하지 않고 보상은 선택적으로 제안합니다.</li>
+<li>유료 도구 없이 해결할 수 없는 보드를 허용하지 않습니다.</li>
+<li>광고 제거, 선택형 보상 광고, 도구 묶음, 보드·룬·UI·배경 외형을 후보로 둡니다.</li>
+<li>배치 횟수 추가, 능력 영구 적용, 챕터 스킵은 제외합니다.</li>
+<li>일일·주간 특수 규칙과 시즌 외형은 코어 재미 검증 이후 검토합니다.</li>
+</ul>
+<p>현재 단계에서는 매출 가능성보다 도구 의존, 광고 이후 이탈, 불공정 인식이 증가하지 않는지를 먼저 확인합니다.</p>
+<hr>
+<h1 id="9-프로토타입-변천과-개선-근거" class="chapter">9. 프로토타입 변천과 개선 근거</h1>
+<h2 id="개선-원칙">개선 원칙</h2>
+<blockquote>
+<p>초기 아이디어를 유지하는 것보다 유저가 실제로 판단할 수 있는 재미를 남긴다.</p>
+</blockquote>
+<h2 id="수정-흐름">수정 흐름</h2>
+<table>
+<thead>
+<tr>
+<th>단계</th>
+<th>확인한 문제</th>
+<th>판단과 반영</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>인접 블록 제거형</td>
+<td>항상 다수를 타격하는 것이 유리해 전략이 고정됨</td>
+<td>공격에도 이후 행동의 비용이 필요해 흔적과 공간 부족 실패 도입</td>
+</tr>
+<tr>
+<td>실시간 디펜스</td>
+<td>실시간 압박이 경로 판단을 방해함</td>
+<td>생각할 시간을 보장하도록 턴제 이동과 방향 사전 공개</td>
+</tr>
+<tr>
+<td>룬 트레이스 초기형</td>
+<td>오염이 공개된 이동 정보를 보고 세운 계획을 무효화함</td>
+<td>오염 대상 공개, 행동당 대상 제한, 플로어당 상한 적용</td>
+</tr>
+<tr>
+<td>이동형 보스</td>
+<td>반복 타격 수단이 적고 보스가 갇힘</td>
+<td>돌진 충돌, 탈출 이동, 약점·수호 변형 추가</td>
+</tr>
+</tbody></table>
+<h2 id="대표-개선-사례">대표 개선 사례</h2>
+<table>
+<thead>
+<tr>
+<th>문제</th>
+<th>수정</th>
+<th>확인할 결과</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>오염이 빠르게 늘어 다음 수를 무효화</td>
+<td>행동당 대상과 플로어 총량 제한, 예정 칸 공개, 실제 이동 시에만 생성</td>
+<td>공간 부족 실패가 갑작스럽지 않은가</td>
+</tr>
+<tr>
+<td>화살표가 몬스터 내부 상태와 겹침</td>
+<td>현재 칸과 이동 칸 사이에 배치</td>
+<td>방향과 상태를 동시에 읽을 수 있는가</td>
+</tr>
+<tr>
+<td>보스를 네 룬 안에 반복 타격하기 어렵고 갇힘</td>
+<td>돌진 충돌, 탈출 이동, 약점 표식, 수호 연결</td>
+<td>능력 강제 없이 타격 기회를 만들 수 있는가</td>
+</tr>
+</tbody></table>
+<h3 id="사례-1-오염-칸-수-과다">사례 1. 오염 칸 수 과다</h3>
+<p>몬스터의 동선은 예측할 수 있었지만 오염이 빠르게 늘어 다음 수의 계획을 무효화했습니다. 행동당 오염 대상과 플로어당 총량을 제한하고, 대상과 예정 칸을 미리 표시했습니다. 실제 이동에 성공한 몬스터만 이전 칸을 오염시키며 취소된 역할은 같은 턴의 다른 몬스터에게 재배정하지 않습니다.</p>
+<p>확인할 것은 오염이 사라졌는지가 아닙니다. 이동 예고로 세운 계획이 실제 결과와 이어지면서도 공간 압박이 유지되는지를 봅니다.</p>
+<h3 id="사례-2-몬스터-이동-화살표">사례 2. 몬스터 이동 화살표</h3>
+<p>화살표를 몬스터 내부에 넣으면 적의 상태와 이동 정보가 겹쳤습니다. 현재 칸과 목적지 칸 사이로 이동해 두 정보를 분리했습니다. 이후 옵션에서 크기와 표시 여부를 조절할 수 있는 구조를 검토합니다.</p>
+<h3 id="사례-3-보스-타격과-갇힘">사례 3. 보스 타격과 갇힘</h3>
+<p>일반 몬스터는 남아도 클리어를 막지 않지만 보스는 네 번의 룬 안에서 반복 타격해야 했습니다. 직접 경로만으로는 타격 수단이 부족했고, 보스가 흔적과 오염에 갇히면 정상 진행도 막혔습니다.</p>
+<p>돌진 충돌과 변형별 보조 타격 수단을 추가하고, 완전히 갇힌 보스는 주변 장애물 하나를 제거해 이동하도록 했습니다. 보스의 난도를 높이는 것보다 해결 가능한 타격 기회를 만드는 것이 우선입니다.</p>
+<hr>
+<h1 id="10-검증-계획과-데이터" class="chapter">10. 검증 계획과 데이터</h1>
+<h2 id="검증-순서">검증 순서</h2>
+<p>시장성과 재미가 확인됐다고 단정하지 않습니다. 코어 조작, 게임 구조, 초기 유지, 상업성 순서로 검증합니다.</p>
+<table>
+<thead>
+<tr>
+<th>단계</th>
+<th>핵심 질문</th>
+<th>주요 지표</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>코어 조작</td>
+<td>직접 그리기를 빠르게 이해하고 정확히 입력하는가</td>
+<td>첫 행동 시간, 입력 성공률, 오입력, 회전·반전 성공률</td>
+</tr>
+<tr>
+<td>게임 구조</td>
+<td>공간 판단과 능력·보스가 재도전을 만드는가</td>
+<td>플로어·세션 클리어, 실패 원인, 재시도, 능력 선택, 보스 포기</td>
+</tr>
+<tr>
+<td>초기 유지</td>
+<td>짧은 세션이 복귀와 반복으로 이어지는가</td>
+<td>첫 스테이지 완료, 조기 이탈, D1·D7, 챕터 복귀</td>
+</tr>
+<tr>
+<td>상업성</td>
+<td>획득·광고·도구가 코어 경험을 훼손하지 않는가</td>
+<td>소재별 전환, 광고비 회수, 광고·도구 사용 후 이탈·클리어</td>
+</tr>
+</tbody></table>
+<p>상업 지표는 코어 조작과 초기 유지가 확인된 뒤 판단합니다.</p>
+<h2 id="단계별-세부-항목">단계별 세부 항목</h2>
+<h3 id="1단계-코어-조작">1단계. 코어 조작</h3>
+<ul>
+<li>첫 행동까지 걸린 시간</li>
+<li>첫 룬 입력 성공률과 잘못된 입력 횟수</li>
+<li>회전·반전 형태 입력 성공률</li>
+<li>드래그 조작 만족도</li>
+<li>미리보기와 실제 결과의 불일치</li>
+</ul>
+<h3 id="2단계-게임-구조">2단계. 게임 구조</h3>
+<ul>
+<li>플로어 첫 시도와 세션 내 최종 클리어율</li>
+<li>공간 부족·보스 생존 실패 비중</li>
+<li>실패 후 단기 재시도와 실패 직후 이탈</li>
+<li>능력 선택 분포와 직접·추가 처치 차이</li>
+<li>스테이지 플레이 시간 분포</li>
+<li>중단 후 복원 성공률</li>
+</ul>
+<h3 id="3단계-초기-유지">3단계. 초기 유지</h3>
+<ul>
+<li>첫 플로어 진입과 첫 스테이지 완료</li>
+<li>최초 세션 조기 이탈</li>
+<li>D1·D7 잔존율과 일일 세션 수</li>
+<li>챕터 중단 후 복귀</li>
+</ul>
+<h3 id="4단계-상업성">4단계. 상업성</h3>
+<ul>
+<li>광고 소재별 클릭과 설치 전환</li>
+<li>설치당 비용과 광고비 회수</li>
+<li>보상형 광고 선택·완료와 노출 후 이탈</li>
+<li>도구 사용 가능 상황 대비 사용률</li>
+<li>도구 사용 후 같은 시도 클리어</li>
+<li>결제 노출 후 이탈·환불·불공정 응답</li>
+</ul>
+<h2 id="데이터-수집과-현재-로그">데이터 수집과 현재 로그</h2>
+<p>직접 플레이, 예외 사례 조사, 자동 플레이 로그, QA 지원 기능, 외부 플레이테스트 관찰, 인터뷰를 함께 사용합니다.</p>
+<p>현재 로그에는 세션·복귀, 스테이지·플로어, 룬 경로 결과, 직접·능력 처치, 보스 변형·피격, 실패 원인, 능력 선택, 저장 복원을 포함합니다.</p>
+<h2 id="판정-원칙">판정 원칙</h2>
+<ul>
+<li>공개 벤치마크가 없는 클리어율과 도구 사용률을 업계 표준처럼 만들지 않습니다.</li>
+<li>국가, 장르, 플랫폼, 기간이 다른 수치를 하나의 기준값으로 합치지 않습니다.</li>
+<li>소규모 테스트는 방향 확인에 사용하고 수익성 확정 근거로 사용하지 않습니다.</li>
+<li>평균뿐 아니라 중앙값과 상위 구간을 함께 확인합니다.</li>
+</ul>
+<hr>
+<h1 id="11-제작-범위와-담당-역할" class="chapter">11. 제작 범위와 담당 역할</h1>
+<h2 id="현재-프로토타입">현재 프로토타입</h2>
+<table>
+<thead>
+<tr>
+<th>구현 완료</th>
+<th>제외 범위</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>7×7 보드와 룬 6종 자동 인식</td>
+<td>Android 실행 파일과 실제 모바일 비율 UI</td>
+</tr>
+<tr>
+<td>회전·반전, 흔적·오염</td>
+<td>완성 아트·애니메이션·사운드·진동</td>
+</tr>
+<tr>
+<td>일반 몬스터 1종, 이동형 보스 1종</td>
+<td>정식 튜토리얼</td>
+</tr>
+<tr>
+<td>보스 변형 3종, 능력 6종</td>
+<td>도구·아웃게임 경제와 광고·결제 연동</td>
+</tr>
+<tr>
+<td>1챕터·3스테이지·9플로어</td>
+<td>장기 메타 시스템과 라이브 운영</td>
+</tr>
+<tr>
+<td>저장·복원, 플레이 로그, QA 패널·지원 API</td>
+<td>제품 수준의 모바일 최적화</td>
+</tr>
+</tbody></table>
+<h2 id="담당-역할">담당 역할</h2>
+<ul>
+<li>게임 콘셉트, 핵심 규칙, 코어 루프, 세션 구조 설계</li>
+<li>룬·몬스터·보스·능력과 초기 밸런스 설계</li>
+<li>UX 정보 우선순위와 예외 처리 정의</li>
+<li>테스트 케이스와 플레이 로그 수집 범위 설계</li>
+<li>프로토타입 요구사항 정의·검수·수정·통합</li>
+</ul>
+<h2 id="ai-활용-범위">AI 활용 범위</h2>
+<p>AI를 HTML·CSS·JavaScript 구현과 반복 수정의 보조 도구로 활용했습니다. 게임 규칙, 요구사항, 우선순위, 예외 조건, 검수 기준을 직접 정의했습니다. 생성 결과는 실제 프로토타입에서 확인하고 수정 방향을 결정했습니다.</p>
+<p>기획 문제 발견<br>→ 구현 요구사항 작성<br>→ AI 보조 구현<br>→ 플레이·로그·QA 검수<br>→ 규칙 또는 UI 수정<br>→ 변경 근거 기록</p>
+<hr>
+<h1 id="12-조건부-제품화-리스크-결론" class="chapter">12. 조건부 제품화·리스크·결론</h1>
+<h2 id="제품화-전제">제품화 전제</h2>
+<p>현재 목표는 1인 출시가 아닙니다. 코어 조작과 시장 가능성을 보여주는 포트폴리오 프로토타입이며, 제품화는 팀 또는 퍼블리셔 협업을 전제로 합니다.</p>
+<table>
+<thead>
+<tr>
+<th>단계</th>
+<th>목표 결과물</th>
+<th>진행 조건</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>M1~M2</td>
+<td>모바일 UI·터치, 튜토리얼, 로그 보완</td>
+<td>핵심 규칙과 첫 행동·실패 흐름 검수</td>
+</tr>
+<tr>
+<td>M3~M4</td>
+<td>Android 테스트 빌드와 폐쇄형 플레이테스트</td>
+<td>저장·복원·로그 수집 안정화</td>
+</tr>
+<tr>
+<td>M5</td>
+<td>코어 규칙과 밸런스 조정</td>
+<td>클리어·실패·재시도 데이터 확보</td>
+</tr>
+<tr>
+<td>M6~M7</td>
+<td>비주얼·사운드 개선과 광고 소재 검증</td>
+<td>코어 재미와 첫 플레이 이해도 유지</td>
+</tr>
+<tr>
+<td>M8~M9</td>
+<td>소프트론칭, 확장 또는 방향 전환 판단</td>
+<td>유지·획득·수익 가드레일 충족</td>
+</tr>
+</tbody></table>
+<p>메타게임과 장기 운영은 코어 검증 이후 설계합니다.</p>
+<h2 id="주요-리스크">주요 리스크</h2>
+<table>
+<thead>
+<tr>
+<th>리스크</th>
+<th>대응 방향</th>
+<th>확인 지표</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>룬 학습과 드래그 오입력</td>
+<td>첫 룬 가이드, 입력 보정, 실패 피드백</td>
+<td>첫 입력 성공률·오입력</td>
+</tr>
+<tr>
+<td>흔적·오염 가독성 부족</td>
+<td>상태 대비와 예정 정보 분리</td>
+<td>실패 원인 이해도</td>
+</tr>
+<tr>
+<td>공간 관리의 불쾌감</td>
+<td>오염 상한, 미리보기, 실패 설명</td>
+<td>실패 후 재시도</td>
+</tr>
+<tr>
+<td>특정 능력 편중</td>
+<td>선택률과 클리어율 비교</td>
+<td>능력별 선택·승률</td>
+</tr>
+<tr>
+<td>보스 기믹 불합리</td>
+<td>진입 안내와 해결 가능성 보장</td>
+<td>변형별 포기율</td>
+</tr>
+<tr>
+<td>반복 콘텐츠 부족</td>
+<td>룬·몬스터·보스·규칙 조합</td>
+<td>D1·D7</td>
+</tr>
+<tr>
+<td>광고와 실제 플레이 차이</td>
+<td>광고 행동을 튜토리얼에서 재현</td>
+<td>첫 플로어 진입률</td>
+</tr>
+<tr>
+<td>모바일 완성도 부족</td>
+<td>모바일 화면과 터치 입력 재설계</td>
+<td>기기별 입력 성공률</td>
+</tr>
+<tr>
+<td>도구 의존</td>
+<td>무료 해결 가능성과 공급 검증</td>
+<td>도구 의존 클리어 비중</td>
+</tr>
+</tbody></table>
+<h2 id="결론">결론</h2>
+<blockquote>
+<p>룬 트레이스는 직접 그리는 입력이 전투와 공간 관리에 동시에 적용되고, 룬·몬스터·능력·보스 규칙의 조합으로 반복 가능한 콘텐츠를 만드는 모바일 캐주얼 퍼즐 로그라이크입니다.</p>
+</blockquote>
+<p>현재 프로토타입은 완성된 사업성을 주장하지 않습니다. 직접 입력, 공간 관리, 짧은 능력 성장이 실제 재미와 시장 지표로 이어질 가능성을 확인하고, 불쾌하거나 막히는 지점을 규칙·정보 표시·예외 처리로 수정해 다시 검증할 수 있는 구조를 만든 결과물입니다.</p>
+<hr>
+<h1 id="부록-a-제출-목적별-가감-기준" class="chapter page-start">부록 A. 제출 목적별 가감 기준</h1>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>퍼블리셔</th>
+<th>기획자 포트폴리오</th>
+<th>경기게임오디션</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>제품 요약·코어 루프</td>
+<td>필수</td>
+<td>필수</td>
+<td>필수</td>
+</tr>
+<tr>
+<td>핵심 규칙·실패 구조</td>
+<td>필수</td>
+<td>필수</td>
+<td>필수</td>
+</tr>
+<tr>
+<td>시장·타깃</td>
+<td>상세</td>
+<td>요약</td>
+<td>상세</td>
+</tr>
+<tr>
+<td>서브컬처 분석</td>
+<td>대상에 따라</td>
+<td>공고 대응 시 상세</td>
+<td>작품 방향에 따라</td>
+</tr>
+<tr>
+<td>광고·튜토리얼</td>
+<td>상세</td>
+<td>UX 사례 중심</td>
+<td>중간</td>
+</tr>
+<tr>
+<td>능력·보스·도구</td>
+<td>고수준</td>
+<td>상세</td>
+<td>상세</td>
+</tr>
+<tr>
+<td>BM·운영</td>
+<td>상세</td>
+<td>축약</td>
+<td>중간</td>
+</tr>
+<tr>
+<td>프로토타입 변천</td>
+<td>요약</td>
+<td>상세</td>
+<td>상세</td>
+</tr>
+<tr>
+<td>UX·예외 처리</td>
+<td>중간</td>
+<td>상세</td>
+<td>중간</td>
+</tr>
+<tr>
+<td>검증 지표</td>
+<td>상세</td>
+<td>설계 근거 중심</td>
+<td>상세</td>
+</tr>
+<tr>
+<td>역할·AI 활용</td>
+<td>요약</td>
+<td>상세</td>
+<td>명시</td>
+</tr>
+<tr>
+<td>제품화 로드맵</td>
+<td>상세</td>
+<td>축약</td>
+<td>상세</td>
+</tr>
+</tbody></table>
+<h2 id="퍼블리셔-제출본">퍼블리셔 제출본</h2>
+<ul>
+<li>시장 기회, 타깃, 수익화, 콘텐츠 생산성, 조건부 제품화 계획을 강화합니다.</li>
+<li>상세 능력 규칙과 내부 QA 절차는 줄입니다.</li>
+<li>실제 시장 수치에는 국가, 연도, 플랫폼, 표본, 출처를 표시합니다.</li>
+</ul>
+<h2 id="기획자-공고-포트폴리오">기획자 공고 포트폴리오</h2>
+<ul>
+<li>문제 발견과 수정 근거를 앞에 배치합니다.</li>
+<li>능력, 보스, UX, 예외 처리, 로그 설계의 구체적인 판단을 보여줍니다.</li>
+<li>AI 활용보다 요구사항 정의와 검수 결과를 중심으로 설명합니다.</li>
+<li>시장과 BM은 기획 의도를 이해하는 데 필요한 정도만 남깁니다.</li>
+</ul>
+<h2 id="경기게임오디션-제출본">경기게임오디션 제출본</h2>
+<ul>
+<li>게임의 독창성, 실제 구현 범위, 시장 가능성, 팀 개발 가능성을 균형 있게 배치합니다.</li>
+<li>프로토타입 영상과 플레이 가능한 링크를 앞에 둡니다.</li>
+<li>제품화 로드맵은 팀 구성과 지원 조건을 전제로 작성합니다.</li>
+</ul>
+<hr>
+<h1 id="부록-b-데이터-테이블-작성-대상" class="chapter page-start">부록 B. 데이터 테이블 작성 대상</h1>
+<p>정규화와 물리 구조는 별도 데이터 테이블 문서에서 작성합니다. 마스터 문서에는 필요한 데이터 범위만 남깁니다.</p>
+<h2 id="진행">진행</h2>
+<ul>
+<li>챕터</li>
+<li>스테이지</li>
+<li>플로어</li>
+<li>보드 크기와 기본 조건</li>
+<li>클리어·실패 조건</li>
+<li>목표 플레이 시간</li>
+</ul>
+<h2 id="룬">룬</h2>
+<ul>
+<li>룬 ID와 표시 이름</li>
+<li>기본 형태와 칸 수</li>
+<li>회전·반전 허용</li>
+<li>출현 가능 구간</li>
+<li>선택 가중치</li>
+</ul>
+<h2 id="몬스터">몬스터</h2>
+<ul>
+<li>몬스터 ID와 유형</li>
+<li>방어막</li>
+<li>이동 가능 방향</li>
+<li>오염 생성 가능 여부</li>
+<li>처치 EXP</li>
+<li>출현 구간과 수량</li>
+</ul>
+<h2 id="보스">보스</h2>
+<ul>
+<li>보스 기본형</li>
+<li>스테이지</li>
+<li>방어막과 필요 타격 수</li>
+<li>일반 몬스터 동반 수</li>
+<li>이동 규칙</li>
+<li>적용 변형</li>
+<li>진입 안내 문구</li>
+</ul>
+<h2 id="능력">능력</h2>
+<ul>
+<li>능력 ID와 이름</li>
+<li>전투·퍼즐 분류</li>
+<li>최대 단계</li>
+<li>단계별 효과</li>
+<li>발동 조건과 횟수</li>
+<li>대상과 우선순위</li>
+<li>보스 적용 여부</li>
+<li>EXP 지급 여부</li>
+<li>미리보기 정보</li>
+</ul>
+<h2 id="도구">도구</h2>
+<ul>
+<li>도구 ID와 이름</li>
+<li>사용 조건</li>
+<li>대상</li>
+<li>효과</li>
+<li>소모 시점</li>
+<li>반입·보유 한도</li>
+<li>무료 공급과 가격</li>
+</ul>
+<h2 id="보상-경제">보상·경제</h2>
+<ul>
+<li>EXP 획득 조건</li>
+<li>레벨업 요구치</li>
+<li>플로어 전멸 보상</li>
+<li>챕터 완료 보상</li>
+<li>아웃게임 재화</li>
+<li>도구 가격</li>
+<li>외형 해금 조건</li>
+</ul>
+<h2 id="ui-텍스트">UI·텍스트</h2>
+<ul>
+<li>능력·도구·보스 설명</li>
+<li>상태별 안내 문구</li>
+<li>튜토리얼 단계</li>
+<li>실패 원인 문구</li>
+<li>강조 우선순위</li>
+</ul>
+<h2 id="로그">로그</h2>
+<ul>
+<li>세션</li>
+<li>스테이지·플로어</li>
+<li>룬 선택과 경로 결과</li>
+<li>처치·오염·공간 상태</li>
+<li>능력 선택과 발동</li>
+<li>보스 변형과 피격</li>
+<li>실패·재시도·복귀</li>
+<li>도구 사용과 결과</li>
+<li>광고·결제 가설 검증 이벤트</li>
+</ul>
+<hr>
+<h1 id="부록-c-수치-시장-데이터" class="chapter page-start">부록 C. 수치·시장 데이터</h1>
+<p>본문에는 플레이 구조와 판단 방향을 우선 배치합니다. 초기 밸런스값, 확장 계산, 시장 근거, 수익성 시나리오는 이 부록에서 관리합니다. 구현값과 목표값, 외부 사실과 내부 가정을 구분합니다.</p>
+<h2 id="c-1-현재-프로토타입-구조값">C-1. 현재 프로토타입 구조값</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th align="right">현재 값</th>
+<th>상태</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>보드 크기</td>
+<td align="right">7×7, 총 49칸</td>
+<td>구현값</td>
+</tr>
+<tr>
+<td>플로어당 룬</td>
+<td align="right">최대 4개</td>
+<td>구현값</td>
+</tr>
+<tr>
+<td>스테이지당 플로어</td>
+<td align="right">3개</td>
+<td>구현값</td>
+</tr>
+<tr>
+<td>챕터당 스테이지</td>
+<td align="right">3개</td>
+<td>구현값</td>
+</tr>
+<tr>
+<td>챕터당 플로어</td>
+<td align="right">총 9개</td>
+<td>구현값</td>
+</tr>
+<tr>
+<td>룬 기본형</td>
+<td align="right">6종</td>
+<td>구현값</td>
+</tr>
+<tr>
+<td>능력</td>
+<td align="right">전투 3종·퍼즐 3종</td>
+<td>구현값</td>
+</tr>
+<tr>
+<td>레벨업 카드</td>
+<td align="right">최대 3장</td>
+<td>구현값</td>
+</tr>
+</tbody></table>
+<h2 id="c-2-초기-밸런스값">C-2. 초기 밸런스값</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th align="right">현재 값</th>
+<th>성격</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>직접 처치 EXP</td>
+<td align="right">일반 몬스터 1체당 1</td>
+<td>구현값</td>
+</tr>
+<tr>
+<td>레벨업 요구치</td>
+<td align="right">EXP 7</td>
+<td>초기 테스트값</td>
+</tr>
+<tr>
+<td>챕터 목표 능력 선택</td>
+<td align="right">약 6회</td>
+<td>목표값</td>
+</tr>
+<tr>
+<td>행동당 오염 대상</td>
+<td align="right">최대 2체</td>
+<td>구현값</td>
+</tr>
+<tr>
+<td>플로어당 몬스터 오염</td>
+<td align="right">최대 6칸</td>
+<td>구현값</td>
+</tr>
+<tr>
+<td>스테이지 1·2 보스 방어막</td>
+<td align="right">1개</td>
+<td>초기 테스트값</td>
+</tr>
+<tr>
+<td>스테이지 3 보스 방어막</td>
+<td align="right">2개</td>
+<td>초기 테스트값</td>
+</tr>
+<tr>
+<td>스테이지 1·2 보스 필요 타격</td>
+<td align="right">2회</td>
+<td>초기 테스트값</td>
+</tr>
+<tr>
+<td>스테이지 3 보스 필요 타격</td>
+<td align="right">3회</td>
+<td>초기 테스트값</td>
+</tr>
+<tr>
+<td>스테이지 1·2 보스 동반 일반 몬스터</td>
+<td align="right">3체</td>
+<td>초기 테스트값</td>
+</tr>
+<tr>
+<td>스테이지 3 보스 동반 일반 몬스터</td>
+<td align="right">5체</td>
+<td>초기 테스트값</td>
+</tr>
+</tbody></table>
+<p>적 수와 직접 처치율이 확정되지 않았으므로 EXP와 보스 수치는 플레이테스트 이후 조정합니다.</p>
+<h2 id="c-3-세션과-ui-목표값">C-3. 세션과 UI 목표값</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th align="right">목표</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>플로어</td>
+<td align="right">약 1&#126;3분</td>
+</tr>
+<tr>
+<td>스테이지</td>
+<td align="right">약 5&#126;10분</td>
+</tr>
+<tr>
+<td>챕터</td>
+<td align="right">약 15&#126;30분</td>
+</tr>
+<tr>
+<td>스테이지 활동 시간 중앙 구간</td>
+<td align="right">P50 5&#126;7분</td>
+</tr>
+<tr>
+<td>스테이지 활동 시간 상위 구간</td>
+<td align="right">P90 10분 이내</td>
+</tr>
+<tr>
+<td>플레이 필수 정보</td>
+<td align="right">12px 미만 사용 금지</td>
+</tr>
+<tr>
+<td>플레이 화면 핵심 설명</td>
+<td align="right">1문장·최대 2줄</td>
+</tr>
+</tbody></table>
+<p>세션 시간은 외부 시장 평균을 그대로 복사한 값이 아닙니다. 학생의 쉬는 시간과 모바일의 짧은 플레이 상황을 가정한 내부 목표입니다. 실제 판단은 평균보다 P50과 P90을 함께 사용합니다.</p>
+<p>P50은 전체 기록의 중앙값이며, P90은 기록의 90%가 해당 시간 안에 들어오는지를 확인하는 기준입니다.</p>
+<h2 id="c-4-보드와-룬-확장-계산">C-4. 보드와 룬 확장 계산</h2>
+<p>기존 흔적과 겹치지 않는 기본 규칙을 기준으로 계산합니다.</p>
+<table>
+<thead>
+<tr>
+<th>보드</th>
+<th align="right">전체 칸</th>
+<th align="right">8칸 룬 1개</th>
+<th align="right">8칸 룬 4개</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>7×7</td>
+<td align="right">49칸</td>
+<td align="right">8칸·16.3%</td>
+<td align="right">32칸·65.3%</td>
+</tr>
+<tr>
+<td>9×9</td>
+<td align="right">81칸</td>
+<td align="right">8칸·9.9%</td>
+<td align="right">32칸·39.5%</td>
+</tr>
+</tbody></table>
+<p>7×7에서 8칸 룬 4개는 보드의 약 3분의 2를 차지합니다. 몬스터와 오염 공간까지 고려하면 배치 선택보다 공간 부족이 먼저 발생할 가능성이 큽니다. 8칸 룬은 기본 확장 범위에서 제외하고, 9×9에서도 별도 검증이 필요한 대형 룬으로만 취급합니다.</p>
+<h2 id="c-5-한국-시장-참고-데이터">C-5. 한국 시장 참고 데이터</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th align="right">공개 수치</th>
+<th>범위와 주의</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>한국 모바일 게임 이용자 조사</td>
+<td align="right">7,402명</td>
+<td>KOCCA 2024 조사</td>
+</tr>
+<tr>
+<td>연령 구성</td>
+<td align="right">20대 20.2% · 30대 19.7% · 40대 19.4%</td>
+<td>특정 연령만의 시장으로 볼 수 없음</td>
+</tr>
+<tr>
+<td>매일 모바일 게임 이용</td>
+<td align="right">52.1%</td>
+<td>하루 여러 번 33.5%와 하루 한 번 18.6% 합계</td>
+</tr>
+<tr>
+<td>퍼즐·퀴즈 선호</td>
+<td align="right">38%</td>
+<td>선호 장르 상위 3개 응답</td>
+</tr>
+<tr>
+<td>2024년 1&#126;10월 한국 퍼즐 다운로드</td>
+<td align="right">약 8,800만 건</td>
+<td>전년 대비 7% 증가, 전체 게임 다운로드의 23%</td>
+</tr>
+</tbody></table>
+<h3 id="해석">해석</h3>
+<ul>
+<li>학생만을 상업 타깃으로 한정하기 어렵습니다.</li>
+<li>한국 16&#126;24세는 짧은 휴식 사용성을 확인하는 검증층으로 사용할 수 있습니다.</li>
+<li>실제 상업 코호트는 20&#126;44세까지 열어두고 비교해야 합니다.</li>
+<li>퍼즐은 다운로드 수요가 크지만 높은 인앱 구매 수익을 자동으로 보장하지 않습니다.</li>
+</ul>
+<h3 id="출처">출처</h3>
+<ul>
+<li><a href="https://welcon.kocca.kr/cmm/fms/FileDown.do?atchFileId=FILE_ab34deb3-ff55-435b-9250-7fcb03a400bb&fileSn=1&preview=Y">KOCCA 2024 한국 모바일 게임 이용자 조사</a></li>
+<li><a href="https://sensortower.com/blog/state-of-mobile-games-in-korea-2024">Sensor Tower, State of Mobile Games in Korea 2024</a></li>
+</ul>
+<h2 id="c-6-사우디-mena-참고-데이터">C-6. 사우디·MENA 참고 데이터</h2>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>공개 수치·사실</th>
+<th>범위와 주의</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MENA-3 이용자</td>
+<td>다수가 35세 미만</td>
+<td>사우디 단일 국가 수치가 아님</td>
+</tr>
+<tr>
+<td>조사 표본 여성 비중</td>
+<td>1,580명 중 37% 이상</td>
+<td>전체 이용자 성비로 단정하지 않음</td>
+</tr>
+<tr>
+<td>모바일 선호 장르</td>
+<td>퍼즐이 가장 많이 플레이되는 장르</td>
+<td>MENA-3 조사 기준</td>
+</tr>
+<tr>
+<td>사우디 Block Blast 주간 다운로드</td>
+<td>10.5만 건 이상</td>
+<td>2025년 4분기 일부 기간 추정치</td>
+</tr>
+<tr>
+<td>사우디 Block Blast 활성 이용자</td>
+<td>약 99.6만 명</td>
+<td>단일 상위 게임 사례</td>
+</tr>
+</tbody></table>
+<h3 id="해석-2">해석</h3>
+<ul>
+<li>사우디는 경쟁이 없는 시장이 아닙니다.</li>
+<li>기회는 시장의 미활성보다 아랍어와 오른쪽에서 왼쪽으로 읽는 RTL 화면, 스토어 문구, 결제, 고객지원, 문화적 가독성을 함께 처리하는 데 있습니다.</li>
+<li>사우디의 1차 검증층은 아랍어권 18&#126;34세로 두고 성별과 유입 경로를 분리해 확인합니다.</li>
+<li>상위 퍼즐의 이용 규모와 인앱 구매 매출이 항상 함께 증가하지는 않습니다. 보상형 광고와 낮은 마찰의 인앱 구매를 함께 검증해야 합니다.</li>
+</ul>
+<h3 id="출처-2">출처</h3>
+<ul>
+<li><a href="https://nikopartners.com/the-future-of-gaming-in-mena-3-understanding-the-opportunity/">Niko Partners, The Future of Gaming in MENA-3</a></li>
+<li><a href="https://sensortower.com/blog/2025-q4-unified-top-5-puzzle-games-units-sa-64bc1644e1714cfff1e615fc">Sensor Tower, Saudi Arabia Puzzle Games Q4 2025</a></li>
+<li><a href="https://sensortower.com/blog/2025-q3-android-top-5-puzzle%20games-revenue-sa-64bc1644e1714cfff1e615fc">Sensor Tower, Saudi Arabia Android Puzzle Revenue Q3 2025</a></li>
+</ul>
+<h2 id="c-7-타깃-검증-구분">C-7. 타깃 검증 구분</h2>
+<table>
+<thead>
+<tr>
+<th>시장</th>
+<th>사용성 검증층</th>
+<th>상업 검증층</th>
+<th>우선 확인</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>한국</td>
+<td>16&#126;24세</td>
+<td>20&#126;44세</td>
+<td>튜토리얼, 스테이지 시간, D1·D7, 실패 후 재시도</td>
+</tr>
+<tr>
+<td>사우디</td>
+<td>아랍어권 18&#126;34세</td>
+<td>실제 유입 데이터로 재분류</td>
+<td>RTL, 광고·스토어 현지화, D7, 광고 시청, 인앱 구매</td>
+</tr>
+</tbody></table>
+<p>청소년의 플레이 타깃과 결제 타깃은 분리합니다.</p>
+<h2 id="c-8-수익성-시나리오-참고">C-8. 수익성 시나리오 참고</h2>
+<p>다음 값은 매출 예측이 아니라 팀 규모와 유료 유입 위험을 비교하기 위한 내부 민감도입니다.</p>
+<p>ARPU는 이용자 1명당 평균 수익을 뜻합니다. IAP는 인앱 구매, IAA는 인앱 광고 수익을 뜻합니다.</p>
+<table>
+<thead>
+<tr>
+<th>시나리오</th>
+<th align="right">D90 IAP ARPU</th>
+<th align="right">D90 IAA ARPU</th>
+<th align="right">설치당 D90 순기여금</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>보수</td>
+<td align="right">$0.10</td>
+<td align="right">$0.20</td>
+<td align="right">약 385원</td>
+</tr>
+<tr>
+<td>기준</td>
+<td align="right">$0.35</td>
+<td align="right">$0.45</td>
+<td align="right">약 1,009원</td>
+</tr>
+<tr>
+<td>공개 평균 합산 상단</td>
+<td align="right">$1.34</td>
+<td align="right">$0.55</td>
+<td align="right">약 2,280원</td>
+</tr>
+</tbody></table>
+<p>계산에는 인앱 구매 수수료 15%, 결제·분석·지원 변동비 준비율 10%, 계획환율 1달러당 1,500원을 적용했습니다. 세금, 환불, 고정비, 유료 유입비는 포함하지 않았습니다. IAP와 IAA 공개값이 동일한 하이브리드 코호트라는 보장이 없으므로 상단값을 일반 목표로 사용하지 않습니다.</p>
+<table>
+<thead>
+<tr>
+<th>팀 가정</th>
+<th align="right">경제적 비용</th>
+<th align="right">기준 순기여금에서 필요한 설치</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>린 3인·12개월</td>
+<td align="right">약 1.94억 원</td>
+<td align="right">약 19.2만</td>
+</tr>
+<tr>
+<td>기준 4인·15개월</td>
+<td align="right">약 4.60억 원</td>
+<td align="right">약 45.6만</td>
+</tr>
+<tr>
+<td>확장 6인·18개월</td>
+<td align="right">약 9.56억 원</td>
+<td align="right">약 94.7만</td>
+</tr>
+</tbody></table>
+<p>유료 유입비를 제외한 계산입니다. 결론은 높은 수익을 예상한다는 것이 아닙니다. 작은 팀, 높은 유기적 유입 비중, 검증된 광고 생애가치가 갖춰질 때 조건부로 제품화를 검토할 수 있다는 뜻입니다.</p>
+<h3 id="출처와-가정">출처와 가정</h3>
+<ul>
+<li><a href="https://www.appsflyer.com/resources/reports/app-marketing-monetization-report/">AppsFlyer, App Marketing and Monetization Report</a></li>
+<li><a href="https://developer.apple.com/app-store/small-business-program/">Apple App Store Small Business Program</a></li>
+<li><a href="https://support.google.com/googleplay/android-developer/answer/112622?hl=en-GB">Google Play 서비스 수수료</a></li>
+<li>팀 규모, 기간, 월 완전원가, 외부비, 계획환율은 내부 협의용 가정입니다.</li>
+</ul>
+<h2 id="c-9-지표-판정-구간">C-9. 지표 판정 구간</h2>
+<table>
+<thead>
+<tr>
+<th>지표</th>
+<th>초기 기준</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>실패 후 재시도</td>
+<td>실패 후 10분 이내 재시도 여부</td>
+</tr>
+<tr>
+<td>최초 세션 조기 이탈</td>
+<td>최초 실행 후 10분 이내 세션 종료</td>
+</tr>
+<tr>
+<td>초기 유지</td>
+<td>D1·D7 잔존율</td>
+</tr>
+<tr>
+<td>세션 시간</td>
+<td>평균과 함께 P50·P75·P90 확인</td>
+</tr>
+<tr>
+<td>보스</td>
+<td>변형별 클리어·포기·재시도 비교</td>
+</tr>
+<tr>
+<td>도구</td>
+<td>사용 가능 상황 대비 사용률과 같은 시도 클리어율</td>
+</tr>
+</tbody></table>
+<p>공개 벤치마크가 없는 클리어율, 도구 사용률, 재시도율은 프로토타입에서 직접 기준을 만듭니다.</p>
+<p>D1과 D7은 설치 후 각각 1일째와 7일째 다시 플레이한 이용자의 비율입니다.</p>
+
+    </article>
+  </main>
+</body>
+</html>
