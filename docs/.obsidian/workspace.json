@@ -1,0 +1,198 @@
+{
+  "main": {
+    "id": "6398411c4355cf1a",
+    "type": "split",
+    "children": [
+      {
+        "id": "6043798bd867fcba",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "993f2a81a192064f",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "새 탭"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "14efbf2ce9c7322b",
+    "type": "split",
+    "children": [
+      {
+        "id": "bf0101811c3091b3",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ed6e18046228c347",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "파일 탐색기"
+            }
+          },
+          {
+            "id": "40bcea406a319ff5",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "검색"
+            }
+          },
+          {
+            "id": "71b55237a7ca33c7",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "북마크"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "eec9d8657de25b27",
+    "type": "split",
+    "children": [
+      {
+        "id": "d94514e0d6204c07",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ff5efc1ed27130bd",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "백링크"
+            }
+          },
+          {
+            "id": "1973414f883d7ba5",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "나가는 링크"
+            }
+          },
+          {
+            "id": "cc2e9a55d920eafb",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "태그"
+            }
+          },
+          {
+            "id": "373b3b20d1ca34c3",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "모든 속성"
+            }
+          },
+          {
+            "id": "0ce66393bb3ce1ec",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "개요"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:빠른 전환기 열기": false,
+      "graph:그래프 뷰 열기": false,
+      "canvas:새 캔버스 만들기": false,
+      "daily-notes:오늘의 일일 노트 열기": false,
+      "templates:템플릿 삽입": false,
+      "command-palette:명령어 팔레트 열기": false,
+      "bases:새 베이스 생성하기": false
+    }
+  },
+  "active": "993f2a81a192064f",
+  "lastOpenFiles": [
+    "2026-07-28_룬-트레이스-창작-기획서-마스터-수정제안본.md",
+    "2026-07-29_룬-트레이스-경기게임오디션-제출본.md",
+    "2026-07-27_전투-능력-개발-전달.md",
+    "2026-07-27_룬-트레이스-포트폴리오-본문-초안.md",
+    "2026-07-29_룬-트레이스-기획자-포트폴리오본.md",
+    "2026-07-29_룬-트레이스-슈퍼센트-게임제출본.md",
+    "Project_TTT_저격_포트폴리오_설계안.md",
+    "play-log-setup.md",
+    "play-log-event-schema.md",
+    "PATCH_NOTES.md",
+    "current-game-design.md",
+    "2026-07-27_v0.1.0-개발-전달.md",
+    "2026-07-27_v0.1.0-UI-배치-레벨업-QA-명세.md",
+    "2026-07-27_v0.1.0-긴급-패치-오염-생성-조정-명세.md"
+  ]
+}
