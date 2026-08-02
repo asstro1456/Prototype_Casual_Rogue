@@ -11,7 +11,7 @@
 | 필드 | 형식 | 기준 |
 |---|---|---|
 | `event_id` | string | 생성 후 재전송에서도 유지되는 고유 ID |
-| `event_name` | string | Apps Script 허용 목록의 고정 이벤트명 |
+| `event_name` | string | 소문자 영문으로 시작하는 `[a-z][a-z0-9_]{1,63}` 형식. 표준 이벤트는 대시보드에서 집계하고 사용자 정의 이벤트는 원본 로그로 보관 |
 | `client_time_utc` | string | 브라우저 발생 시각 |
 | `participant_id` | string | 같은 브라우저에서 유지되는 익명 ID |
 | `session_id` | string | 첫 접속에 생성되며 탭 종료 후 5분 안에 복귀하면 유지되는 세션 ID |
@@ -78,7 +78,7 @@
 
 - `state_restore`
 - `data_reset`
-- `boss_start`, `boss_info_view`, `boss_end`
+- `boss_start`, `boss_info_view`, `boss_hit`, `boss_mechanic`, `boss_end`
 
 `session_end`는 탭 종료 시 즉시 기록을 시도하지만 5분 동안 잠정 종료로 본다. 같은 브라우저가 5분 안에 돌아오면 `session_resume`으로 같은 세션을 다시 열고, 5분을 넘기면 이전 세션의 실행 중 `page_hide`를 중간 이탈로 확정한다.
 

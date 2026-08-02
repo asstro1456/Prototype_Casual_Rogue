@@ -2,15 +2,15 @@
   "use strict";
 
   const DEFAULT_CONFIG = {
-    storageNamespace: "rune-trace",
-    databaseName: "rune-trace-play-log",
+    storageNamespace: "play-log",
+    databaseName: "play-log",
     databaseVersion: 1,
     eventStoreName: "events",
-    participantPrefix: "tester_",
-    logPrefix: "RuneTracePlayLog",
+    participantPrefix: "participant_",
+    logPrefix: "PlayLog",
     activeEnvironment: "test",
     endpoints: { test: "", production: "" },
-    testGroup: "internal_qa",
+    testGroup: "external",
     schemaVersion: 1,
     flushThreshold: 20,
     flushIntervalMs: 30000,

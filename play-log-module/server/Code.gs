@@ -4,11 +4,11 @@ function scriptProperty_(key, fallback) {
 
 const SPREADSHEET_ID = scriptProperty_(
   "PLAY_LOG_SPREADSHEET_ID",
-  "1cT2RzvHeshUi4AH6FRBEj8OukQe_oxl3z4xbOvQwdGM",
+  "",
 );
 const SERVICE_NAME = scriptProperty_(
   "PLAY_LOG_SERVICE_NAME",
-  "rune-trace-play-log",
+  "play-log",
 );
 const ENABLE_ANALYTICS = scriptProperty_(
   "PLAY_LOG_ENABLE_ANALYTICS",

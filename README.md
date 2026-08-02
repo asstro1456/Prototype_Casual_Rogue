@@ -4,7 +4,7 @@
 
 ## 프로토타입
 
-- `rune-trace/` — 현재 개발 중인 룬 경로 퍼즐 `v1.0.0`
+- `rune-trace/` — 현재 개발 중인 룬 경로 퍼즐 `v1.0.1`
 - `archive/clear-all-v0.1.0/` — 전체 제거 퍼즐 보관판 `v0.1.0`
 - `archive/realtime-defense-v0.4.0/` — 실시간 디펜스 보관판 `v0.4.0`
 

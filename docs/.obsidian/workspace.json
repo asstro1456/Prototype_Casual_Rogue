@@ -11,10 +11,14 @@
             "id": "993f2a81a192064f",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "PATCH_NOTES.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "새 탭"
+              "title": "PATCH_NOTES"
             }
           }
         ]
@@ -180,6 +184,7 @@
   },
   "active": "993f2a81a192064f",
   "lastOpenFiles": [
+    "play-log-setup.md",
     "2026-07-28_룬-트레이스-창작-기획서-마스터-수정제안본.md",
     "2026-07-29_룬-트레이스-경기게임오디션-제출본.md",
     "2026-07-27_전투-능력-개발-전달.md",
@@ -187,7 +192,6 @@
     "2026-07-29_룬-트레이스-기획자-포트폴리오본.md",
     "2026-07-29_룬-트레이스-슈퍼센트-게임제출본.md",
     "Project_TTT_저격_포트폴리오_설계안.md",
-    "play-log-setup.md",
     "play-log-event-schema.md",
     "PATCH_NOTES.md",
     "current-game-design.md",

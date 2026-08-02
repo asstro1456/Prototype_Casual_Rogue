@@ -1,4 +1,4 @@
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.1";
 const APP_VERSION_NAME = "RUNE TRACE";
 const BOARD_SIZE = 7;
 const RUNES_PER_FLOOR = 4;

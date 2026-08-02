@@ -20,14 +20,46 @@
 
 ### Apps Script 웹앱
 
-운영 `/exec` 주소가 `rune-trace/analytics-config.js`의 `production` 엔드포인트에 연결되어 있다. Apps Script `Code.gs`를 수정하면 기존 배포를 새 버전으로 업데이트해야 한다.
+운영 `/exec` 주소가 `rune-trace/analytics-config.js`의 `production` 엔드포인트에 연결되어 있다. Apps Script `Code.gs`를 수정하면 기존 배포를 새 버전으로 업데이트해야 한다. 다른 프로젝트는 Apps Script 프로젝트 설정의 스크립트 속성에 `PLAY_LOG_SPREADSHEET_ID`를 지정한 뒤 같은 방식으로 배포한다.
 
 현재 운영 설정:
 
 ```text
 activeEnvironment: production
-testGroup: external_prototype_v1.0.0
+testGroup: external_prototype_v1.0.1
 ```
+
+## 재사용 모듈 설정
+
+`rune-trace/play-log.js`는 `PlayLog` API를 제공하고 기존 코드 호환을 위해
+`RuneTracePlayLog` 별칭도 유지한다. 다른 프로젝트는 아래 설정만 바꿔 같은
+클라이언트를 재사용할 수 있다.
+
+```js
+window.RUNE_TRACE_ANALYTICS_CONFIG = {
+  activeEnvironment: "production",
+  endpoints: { production: "YOUR_APPS_SCRIPT_EXEC_URL" },
+  testGroup: "your_project_v1",
+  storageNamespace: "your-project",
+  databaseName: "your-project-play-log",
+  eventStoreName: "events",
+  participantPrefix: "participant_",
+};
+```
+
+표준 API는 `PlayLog.init({ gameVersion, getContext, config })`, `setConsent`,
+`startSession`, `log`, `flush`, `getStatus`다. 이벤트 이름은
+`[a-z][a-z0-9_]{1,63}` 형식이면 원본 로그로 저장된다. 기존 대시보드는
+알고 있는 게임 이벤트만 집계하고, 사용자 정의 이벤트는 `Raw_Batches`와
+`Session_Index`에서 확인한다.
+
+Apps Script 스크립트 속성으로 프로젝트별 저장소를 지정한다.
+
+- `PLAY_LOG_SPREADSHEET_ID`: 사용할 Google Sheets ID(필수)
+- `PLAY_LOG_SERVICE_NAME`: `doGet` 서비스 이름(선택)
+- `PLAY_LOG_ENABLE_ANALYTICS`: `false`면 원본·세션 인덱스만 만들고 게임 전용 집계를 생략
+
+속성을 설정하지 않으면 현재 룬 트레이스 시트와 대시보드를 그대로 사용한다.
 
 ### 게임 배포
 
@@ -47,7 +79,7 @@ testGroup: external_prototype_v1.0.0
 브라우저 개발자 도구 콘솔에서 다음 명령으로 전송 상태를 확인할 수 있다.
 
 ```js
-await RuneTracePlayLog.getStatus()
+await PlayLog.getStatus()
 ```
 
 확인 값:
@@ -65,7 +97,7 @@ await RuneTracePlayLog.getStatus()
 수동 전송 재시도:
 
 ```js
-await RuneTracePlayLog.flush()
+await PlayLog.flush()
 ```
 
 ## 1차 검증 절차
@@ -112,7 +144,7 @@ await RuneTracePlayLog.flush()
 
 1. Apps Script 프로젝트의 `Code.gs`를 새 코드로 교체한다.
 2. 기존 웹 앱 배포를 새 버전으로 업데이트한다.
-3. GitHub Pages에 `v1.0.0` 게임 파일을 배포한다.
+3. GitHub Pages에 `v1.0.1` 게임 파일을 배포한다.
 4. 실제 HTTPS 주소에서 로그 1회 전송 후 새 시트 7개가 자동 생성되는지 확인한다.
 5. 과거 `Events`를 대시보드에 포함하려면 Apps Script 편집기에서 `migrateLegacyEvents()`를 완료될 때까지 반복 실행한다.
 
